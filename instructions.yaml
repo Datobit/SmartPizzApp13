@@ -1,0 +1,61 @@
+Budowa Aplikacji Zamówień Pizzerii
+
+## Zadanie
+Jesteś ekspertem programistą. Twoim zadaniem jest utworzenie kompletnej aplikacji webowej do przyjmowania zamówień w pizzerii w minimalnej liczbie kroków. Aplikacja musi być funkcjonalna i gotowa do użycia.
+
+## Specyfikacja wymagań
+**MUSI zawierać:**
+1. **Frontend** - formularz zamówienia z polami:
+   - Telefon klienta (walidacja 7-11 cyfr)
+   - Adres dostawy (z autouzupełnianiem ulic)
+   - Wybór pizzy z menu (40 pizz w bazie danych chcę umieścić na ekranie jako małe kwadraty z nazwą, 4 rzędy i 10 kwadratów w każdym, po kliknięciu kwadrat zmieni kolor a aplikacja doda daną pizzę do zamówienia)
+   - Wybór rozmiaru (mała/średnia/duża)
+   - Możliwość dodania wielu pizz do zamówienia(okienko dodaj kolejną pizzę które otworzy ponownie wybór pizzy i rozmiaru poniżej poprzedniej pizzy)
+   - Dodatki: sosy (pomidorowy/czosnkowy, liczba sztuk)
+   - Pozycje_extra z bazy danych w formie listy rozwijanej)
+   - wybór napoju(lista rozwijana z bazy danych/opcjonalny wybór)
+   - Wybór płatności (gotówka/karta)
+   - Kalkulacja ceny na żywo
+   - Przycisk "Złóż zamówienie"
+
+2. **Backend** - API do:
+   - Pobierania menu pizz z bazy danych
+   - Wyszukiwania ulic (z bazy danych tabela ULIC podpowiada ulice na podstawie wpisywanego tekstu, tab aby zatwierdzić wybór)
+   - Kalkulacji ceny zamówienia
+   - Zapisywania zamówień do bazy danych
+
+3. **Baza danych** z tabelami(traktuj to jako wskazówkę, nazwy sczytaj z bazy danych):
+   - Menu pizza (id, nazwa, ceny dla rozmiarów)
+   - Napoje
+   - Ulice (dla autouzupełniania adresów)
+   - Zamówienia (wszystkie dane zamówienia + timestamp)
+   - pozycje_extra(pizza snack itp.)
+
+4. **Funkcjonalności biznesowe:**
+   - Automatyczna kalkulacja: cena pizzy + sosy (2 PLN/szt) + dostawa (5 PLN jeśli <100 PLN)
+   - Walidacja formularza przed wysłaniem
+   - Potwierdzenie złożenia zamówienia(zamówienie wpada do bazy danych smartpizzapp13-T3.db)
+
+## Ograniczenia techniczne
+- **Stack**: Next.js 14 + TypeScript + tRPC + Prisma + SQLite
+- **Styling**: Tailwind CSS
+- **Deployment**: Localhost (npm run dev)
+- **Czas**: Maksymalnie 10 kroków implementacji
+
+
+
+## Kryteria sukcesu
+✅ Aplikacja uruchamia się bez błędów (npm run dev)
+✅ Formularz działa i waliduje dane
+✅ Wyszukiwanie ulic działa w czasie rzeczywistym
+✅ Kalkulacja ceny aktualizuje się automatycznie  
+✅ Zamówienia zapisują się do bazy danych
+✅ Interfejs jest responsywny i intuicyjny
+
+## Dodatkowe wskazówki
+- Priorytet: **funkcjonalność nad estetyką**
+- Każdy krok musi być testowalny
+- Unikaj nadmiernej złożoności
+- Skup się na głównym przepływie: wybór → kalkulacja → zamówienie
+- Używaj gotowych komponentów UI z Tailwind, aby przyspieszyć rozwój
+- Komentarze w kodzie wyjaśniające kluczowe części logiki   

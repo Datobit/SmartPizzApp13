@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./smartpizzapp13-T3.db"
+}
+
+model Pizza {
+  id           Int    @id @default(autoincrement())
+  nazwa        String
+  cena_mala    Float
+  cena_srednia Float
+  cena_duza    Float
+  skladniki    PizzaSkladnik[]
+
+  @@map("menu_pizza")
+}
+
+model Skladnik {
+  id    Int             @id @default(autoincrement())
+  nazwa String
+  pizze PizzaSkladnik[]
+
+  @@map("skladniki")
+}
+
+model PizzaSkladnik {
+  id_pizza    Int
+  id_skladnik Int
+  pizza       Pizza    @relation(fields: [id_pizza], references: [id])
+  skladnik    Skladnik @relation(fields: [id_skladnik], references: [id])
+
+  @@id([id_pizza, id_skladnik])
+  @@map("relacja_skladniki")
+}
+
+model Napoj {
+  id    Int    @id @default(autoincrement())
+  nazwa String
+  cena  Float
+
+  @@map("napoje")
+}
+
+model Ulica {
+  id    Int    @id @default(autoincrement())
+  nazwa String
+
+  @@map("ulice")
+}
+
+model PozycjaExtra {
+  id    Int    @id @default(autoincrement())
+  nazwa String
+  cena  Float
+
+  @@map("pozycje_extra")
+}
+
+// Tabela Zamówienia nie ma klucza głównego, więc używamy tylko raw SQL
+// model Zamowienie {
+//   telefon             Int
+//   adres               String
+//   pizza               Int?
+//   sosy                Int
+//   dodatki             String?
+//   cena                Float
+//   platnosc            String
+//   godzina_otrzymania  String?
+//   sosy_ile            Int?
+//   rozmiar             String?
+//
+//   @@map("Zamówienia")
+// }

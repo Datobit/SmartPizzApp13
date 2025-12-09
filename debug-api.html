@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Test Pizza Order Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        input, button { margin: 5px; padding: 8px; }
+        .result { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍕 Pizza Order API Test</h1>
+        
+        <div class="section">
+            <h3>Test składania zamówienia</h3>
+            <button onclick="testOrder()">🧪 Testuj zamówienie</button>
+            <div id="testResult" class="result"></div>
+        </div>
+        
+        <div class="section">
+            <h3>Test pobierania pizz</h3>
+            <button onclick="testPizzas()">📋 Pobierz pizze</button>
+            <div id="pizzaResult" class="result"></div>
+        </div>
+        
+        <div class="section">
+            <h3>Test kalkulacji ceny</h3>
+            <button onclick="testPrice()">💰 Testuj cenę</button>
+            <div id="priceResult" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3002/api/trpc';
+        
+        async function testOrder() {
+            const result = document.getElementById('testResult');
+            result.innerHTML = '⏳ Testowanie...';
+            
+            try {
+                const payload = {
+                    telefon: "123456789",
+                    adres: "Testowa 1",
+                    pizze: [{ id: 1, rozmiar: "mala", polNaPol: null }],
+                    sosy: { pomidorowy: 1, czosnkowy: 0 },
+                    napojId: null,
+                    pozycjeExtraIds: [],
+                    platnosc: "gotowka"
+                };
+                
+                const response = await fetch(`${API_BASE}/pizza.placeOrder`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ json: payload })
+                });
+                
+                const data = await response.json();
+                result.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                result.innerHTML = `❌ Błąd: ${error.message}`;
+            }
+        }
+        
+        async function testPizzas() {
+            const result = document.getElementById('pizzaResult');
+            result.innerHTML = '⏳ Pobieranie...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/pizza.getAllPizzas`);
+                const data = await response.json();
+                result.innerHTML = `<pre>${JSON.stringify(data.result?.data?.slice(0, 3) || data, null, 2)}</pre>`;
+            } catch (error) {
+                result.innerHTML = `❌ Błąd: ${error.message}`;
+            }
+        }
+        
+        async function testPrice() {
+            const result = document.getElementById('priceResult');
+            result.innerHTML = '⏳ Kalkulowanie...';
+            
+            try {
+                const payload = {
+                    pizze: [{ id: 1, rozmiar: "srednia", polNaPol: null }],
+                    sosy: { pomidorowy: 1, czosnkowy: 0 },
+                    napojId: null,
+                    pozycjeExtraIds: []
+                };
+                
+                const response = await fetch(`${API_BASE}/pizza.calculatePrice`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ json: payload })
+                });
+                
+                const data = await response.json();
+                result.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                result.innerHTML = `❌ Błąd: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
