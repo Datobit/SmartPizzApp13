@@ -11,7 +11,11 @@
     "db:studio": "prisma studio",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "migrate:test": "node test-mariadb-connection.cjs",
+    "migrate:export": "node migrate-to-mariadb.cjs",
+    "migrate:import": "node import-data-to-mariadb.cjs",
+    "migrate:full": "node full-migration.cjs"
   },
   "dependencies": {
     "@prisma/client": "^5.6.0",
@@ -21,6 +25,8 @@
     "@trpc/react-query": "^10.45.0",
     "@trpc/server": "^10.45.0",
     "better-sqlite3": "^12.4.1",
+    "dotenv": "^17.2.3",
+    "mysql2": "^3.15.3",
     "next": "^14.0.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",

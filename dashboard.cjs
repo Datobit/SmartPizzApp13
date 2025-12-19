@@ -1,26 +1,32 @@
-const Database = require('better-sqlite3');
+const mysql = require('mysql2/promise');
 const path = require('path');
 const http = require('http');
+require('dotenv').config();
 
-const dbPath = path.join(__dirname, 'prisma', 'smartpizzapp13-T3.db');
-
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   res.writeHead(200, { 
     'Content-Type': 'text/html; charset=utf-8',
     'Access-Control-Allow-Origin': '*'
   });
 
+  let connection;
   try {
-    const db = new Database(dbPath);
+    // Połącz z MariaDB
+    connection = await mysql.createConnection({
+      host: 'localhost',
+      user: 'root',
+      password: 'Pepperoni13',
+      database: 'SmartPizzApp13'
+    });
     
     // Pobierz wszystkie zamówienia
-    const allOrders = db.prepare(`
+    const [allOrders] = await connection.execute(`
       SELECT * FROM zamowienia 
       ORDER BY created_at DESC
-    `).all();
+    `);
 
     // Pobierz pizze z menu do mapowania nazw
-    const pizzas = db.prepare('SELECT * FROM menu_pizza').all();
+    const [pizzas] = await connection.execute('SELECT * FROM menu_pizza');
     
     // Funkcje pomocnicze do filtrowania danych
     const getOrdersInRange = (days) => {
@@ -134,8 +140,6 @@ const server = http.createServer((req, res) => {
     };
 
     const pizzaStats30days = getPizzaStats(30);
-
-    db.close();
 
     const html = `
 <!DOCTYPE html>
@@ -752,8 +756,15 @@ const server = http.createServer((req, res) => {
 </html>`;
 
     res.end(html);
+    
+    if (connection) {
+      await connection.end();
+    }
   } catch (error) {
     res.end(`<h1>Błąd</h1><p>${error.message}</p><pre>${error.stack}</pre>`);
+    if (connection) {
+      await connection.end();
+    }
   }
 });
 

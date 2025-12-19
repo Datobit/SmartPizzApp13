@@ -1,7 +1,5 @@
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('prisma/smartpizzapp13-T3.db');
-
-db.configure('busyTimeout', 5000); // Czekaj 5 sekund na zwolnienie blokady
+const mysql = require('mysql2/promise');
+require('dotenv').config();
 
 const csvData = `id_pizza;Pizza;cena_mala;cena_srednia;cena_duza
 1;MARGHARITA;20;30;35
@@ -46,47 +44,58 @@ const csvData = `id_pizza;Pizza;cena_mala;cena_srednia;cena_duza
 40;PARMA;29;47;52
 41;RIO TUŃCZYK;25;41;48`;
 
-db.serialize(() => {
-  // 1. Wyczyść tabelę
-  db.run("DELETE FROM menu_pizza", (err) => {
-    if (err) {
-      console.error("Błąd czyszczenia tabeli:", err);
-      return;
-    }
-    console.log("Tabela menu_pizza wyczyszczona.");
-  });
-
-  // 2. Resetuj autoincrement (opcjonalnie, ale dobre dla porządku ID)
-  db.run("DELETE FROM sqlite_sequence WHERE name='menu_pizza'");
-
-  // 3. Wstaw nowe dane
-  const stmt = db.prepare("INSERT INTO menu_pizza (id, nazwa, cena_mala, cena_srednia, cena_duza) VALUES (?, ?, ?, ?, ?)");
-  
-  const lines = csvData.split('\n');
-  let count = 0;
-
-  for (let i = 1; i < lines.length; i++) { // Pomiń nagłówek
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    const parts = line.split(';');
-    if (parts.length < 2) continue;
-
-    const id = parseInt(parts[0]);
-    const nazwa = parts[1];
-    // Obsługa pustych cen (np. MacGyver)
-    const cena_mala = parseFloat(parts[2]) || 0;
-    const cena_srednia = parseFloat(parts[3]) || 0;
-    const cena_duza = parseFloat(parts[4]) || 0;
-
-    stmt.run(id, nazwa, cena_mala, cena_srednia, cena_duza, (err) => {
-      if (err) console.error(`Błąd wstawiania ID ${id}:`, err.message);
+async function updateMenu() {
+  let connection;
+  try {
+    // Połącz z MariaDB
+    connection = await mysql.createConnection({
+      host: 'localhost',
+      user: 'root',
+      password: 'Pepperoni13',
+      database: 'SmartPizzApp13'
     });
-    count++;
-  }
 
-  stmt.finalize(() => {
+    // 1. Wyczyść tabelę
+    await connection.execute("DELETE FROM menu_pizza");
+    console.log("Tabela menu_pizza wyczyszczona.");
+
+    // 2. Resetuj autoincrement
+    await connection.execute("ALTER TABLE menu_pizza AUTO_INCREMENT = 1");
+
+    // 3. Wstaw nowe dane
+    const lines = csvData.split('\n');
+    let count = 0;
+
+    for (let i = 1; i < lines.length; i++) { // Pomiń nagłówek
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const parts = line.split(';');
+      if (parts.length < 2) continue;
+
+      const id = parseInt(parts[0]);
+      const nazwa = parts[1];
+      const cena_mala = parseFloat(parts[2]) || 0;
+      const cena_srednia = parseFloat(parts[3]) || 0;
+      const cena_duza = parseFloat(parts[4]) || 0;
+
+      await connection.execute(
+        "INSERT INTO menu_pizza (id, nazwa, cena_mala, cena_srednia, cena_duza) VALUES (?, ?, ?, ?, ?)",
+        [id, nazwa, cena_mala, cena_srednia, cena_duza]
+      );
+      count++;
+    }
+
     console.log(`Zaktualizowano ${count} pozycji w menu.`);
-    db.close();
-  });
-});
+    
+    await connection.end();
+  } catch (error) {
+    console.error('Błąd:', error);
+    if (connection) {
+      await connection.end();
+    }
+    process.exit(1);
+  }
+}
+
+updateMenu();

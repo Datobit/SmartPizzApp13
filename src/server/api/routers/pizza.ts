@@ -41,16 +41,121 @@ export const pizzaRouter = createTRPCRouter({
   searchUlice: publicProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ input }) => {
+      // Szukamy ulic które zawierają podane litery (minimum 3 znaki)
+      if (input.query.length < 3) {
+        return [];
+      }
+
       const ulice = await db.ulica.findMany({
         where: {
-          nazwa: {
+          ulica: {
             contains: input.query,
           },
         },
-        take: 10,
+        select: {
+          ulica: true,
+          dzielnica_nazwa: true,
+        },
+        take: 400,
       });
-      console.log("Search query:", input.query, "Found streets:", ulice.length, ulice);
-      return ulice;
+      
+      // Filtrujemy tylko te z ulicą i dzielnicą, deduplikujemy według ulica+dzielnica
+      const seen = new Set<string>();
+      const unique: Array<{ ulica: string; dzielnica_nazwa: string }> = [];
+      
+      for (const u of ulice) {
+        if (u.ulica && u.dzielnica_nazwa) {
+          const key = `${u.ulica}|||${u.dzielnica_nazwa}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            unique.push({ ulica: u.ulica, dzielnica_nazwa: u.dzielnica_nazwa });
+          }
+        }
+      }
+      
+      // Sortujemy: najpierw te zaczynające się od zapytania, potem reszta alfabetycznie
+      const sorted = unique.sort((a, b) => {
+        const queryLower = input.query.toLowerCase();
+        const aStartsWith = a.ulica.toLowerCase().startsWith(queryLower);
+        const bStartsWith = b.ulica.toLowerCase().startsWith(queryLower);
+        
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+        
+        // Jeśli obie zaczynają się lub obie nie, sortuj alfabetycznie
+        const ulicaCompare = a.ulica.localeCompare(b.ulica, 'pl');
+        if (ulicaCompare !== 0) return ulicaCompare;
+        return a.dzielnica_nazwa.localeCompare(b.dzielnica_nazwa, 'pl');
+      }).slice(0, 15);
+      
+      console.log("Search query:", input.query, "Found unique streets:", sorted.length, sorted);
+      return sorted;
+    }),
+
+  // Pobiera informacje o dzielnicy dla danego klastra, ulicy i numeru
+  getDzielnicaForUlica: publicProcedure
+    .input(z.object({ 
+      miejscowosc: z.string().optional(), // Teraz to jest nazwa klastra/dzielnicy
+      ulica: z.string(),
+      numer: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      // Jeśli podano dzielnicę, używamy jej do filtrowania
+      const whereClause: any = {
+        ulica: {
+          equals: input.ulica,
+        },
+      };
+
+      // Dodaj filtr po dzielnicy tylko jeśli podano miejscowosc
+      if (input.miejscowosc) {
+        whereClause.dzielnica_nazwa = {
+          equals: input.miejscowosc,
+        };
+      }
+      
+      // Jeśli mamy numer, szukamy dokładnego dopasowania: (dzielnica_nazwa) + ulica + numer
+      if (input.numer && input.numer.trim()) {
+        const ulicaRecord = await db.ulica.findFirst({
+          where: {
+            ...whereClause,
+            numer: {
+              equals: input.numer.trim(),
+            },
+          },
+          include: {
+            dzielnica: true,
+          },
+        });
+
+        if (ulicaRecord && ulicaRecord.dzielnica) {
+          const klasterInfo = input.miejscowosc ? ` w klastrze ${input.miejscowosc}` : '';
+          console.log(`Znaleziono dokładny adres${klasterInfo}: ${input.ulica} ${input.numer}`);
+          return {
+            dzielnica_nazwa: ulicaRecord.dzielnica_nazwa,
+            cena_dzielnica: ulicaRecord.dzielnica.cena_dzielnica,
+          };
+        }
+      }
+      
+      // Jeśli nie znaleziono dokładnego numeru, zwracamy pierwszy wynik dla (klastra) + ulicy
+      const ulicaRecord = await db.ulica.findFirst({
+        where: whereClause,
+        include: {
+          dzielnica: true,
+        },
+      });
+
+      if (ulicaRecord && ulicaRecord.dzielnica) {
+        const klasterInfo = input.miejscowosc ? ` w klastrze ${input.miejscowosc}` : '';
+        console.log(`Znaleziono ulicę${klasterInfo}: ${input.ulica} (bez dokładnego numeru)`);
+        return {
+          dzielnica_nazwa: ulicaRecord.dzielnica_nazwa,
+          cena_dzielnica: ulicaRecord.dzielnica.cena_dzielnica,
+        };
+      }
+      
+      return null;
     }),
 
   // Oblicza cenę zamówienia
@@ -61,6 +166,7 @@ export const pizzaRouter = createTRPCRouter({
           z.object({
             id: z.number(),
             rozmiar: z.enum(["mala", "srednia", "duza"]),
+            isKupon: z.boolean().optional(),
             polNaPol: z.object({
               id: z.number(),
             }).optional(),
@@ -70,10 +176,16 @@ export const pizzaRouter = createTRPCRouter({
           pomidorowy: z.number().min(0),
           czosnkowy: z.number().min(0),
         }),
-        napojId: z.number().optional(),
+        napoje: z.array(z.object({
+          id: z.number(),
+          nazwa: z.string(),
+          cena: z.number(),
+        })).optional(),
         pozycjeExtraIds: z.array(z.number()).optional(),
         isKupony: z.boolean().optional(),
         typZamowienia: z.enum(["na_miejscu", "na_wynos", "dowoz"]).optional(),
+        adres: z.string().optional(),
+        customDeliveryPrice: z.number().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -87,11 +199,13 @@ export const pizzaRouter = createTRPCRouter({
         
         if (pizzaData) {
           let pizzaPrice = 0;
-          const kuponEligible = !!input.isKupony;
+          const kuponEligible = !!pizza.isKupon;
+          console.log(`Backend calculatePrice - Pizza ${pizzaData.nazwa}, rozmiar: ${pizza.rozmiar}, isKupon: ${pizza.isKupon}, kuponEligible: ${kuponEligible}`);
           
           if (kuponEligible) {
             // Kupony: średnia 0 zł, duża 10 zł
             pizzaPrice = pizza.rozmiar === "duza" ? 10 : 0;
+            console.log(`  -> Cena kuponowa: ${pizzaPrice} PLN`);
           } else {
             // Bazowa cena pizzy
             switch (pizza.rozmiar) {
@@ -105,6 +219,7 @@ export const pizzaRouter = createTRPCRouter({
                 pizzaPrice = pizzaData.cena_duza;
                 break;
             }
+            console.log(`  -> Cena normalna: ${pizzaPrice} PLN`);
           }
           
           // Jeśli to pizza pół na pół
@@ -139,14 +254,16 @@ export const pizzaRouter = createTRPCRouter({
       // Cena sosów (2 PLN za sztukę)
       totalPrice += (input.sosy.pomidorowy + input.sosy.czosnkowy) * 2;
 
-      // Cena napoju
-      if (input.napojId) {
-        const napoj = await db.napoj.findUnique({
-          where: { id: input.napojId },
-        });
-        if (napoj) {
+      // Cena napojów
+      console.log('calculatePrice - input.napoje:', input.napoje);
+      if (input.napoje && input.napoje.length > 0) {
+        console.log('calculatePrice - Dodaję napoje, ilość:', input.napoje.length);
+        for (const napoj of input.napoje) {
+          console.log('calculatePrice - Napoj:', napoj, 'cena:', napoj.cena);
           totalPrice += napoj.cena;
         }
+      } else {
+        console.log('calculatePrice - Brak napojów lub pusta tablica');
       }
 
       // Cena pozycji extra
@@ -161,9 +278,42 @@ export const pizzaRouter = createTRPCRouter({
         }
       }
 
-      // Dostawa 5 PLN jeśli zamówienie < 100 PLN
-      if (input.typZamowienia === "dowoz" && totalPrice < 100) {
-        totalPrice += 5;
+      // Cena dostawy według dzielnicy
+      if (input.typZamowienia === "dowoz") {
+        // Jeśli użytkownik podał własną cenę dostawy, używamy jej
+        if (input.customDeliveryPrice !== undefined) {
+          console.log('Używam niestandardowej ceny dostawy:', input.customDeliveryPrice, 'PLN');
+          totalPrice += input.customDeliveryPrice;
+        } else if (input.adres) {
+          // W przeciwnym razie wyszukujemy cenę na podstawie adresu
+          const adres = input.adres;
+          const firstPart = adres.split(',')[0];
+          const adresParts = firstPart ? firstPart.trim() : adres;
+          const streetMatch = adresParts.match(/^([\D\s]+?)\s*\d*[a-zA-Z]?$/);
+          const streetName = (streetMatch && streetMatch[1]) ? streetMatch[1].trim() : adresParts;
+          
+          console.log('Szukam adresu:', input.adres, '-> nazwa ulicy:', streetName);
+          
+          const ulicaRecord = await db.ulica.findFirst({
+            where: {
+              ulica: {
+                contains: streetName,
+              },
+            },
+            include: {
+              dzielnica: true,
+            },
+          });
+
+          console.log('Znaleziono rekord ulicy:', ulicaRecord);
+
+          if (ulicaRecord && ulicaRecord.dzielnica) {
+            console.log('Dodaję cenę dostawy:', ulicaRecord.dzielnica.cena_dzielnica, 'PLN');
+            totalPrice += ulicaRecord.dzielnica.cena_dzielnica;
+          } else {
+            console.log('Nie znaleziono adresu w bazie - brak opłaty za dowóz');
+          }
+        }
       }
 
       return { totalPrice };
@@ -179,6 +329,7 @@ export const pizzaRouter = createTRPCRouter({
           z.object({
             id: z.number(),
             rozmiar: z.enum(["mala", "srednia", "duza"]),
+            isKupon: z.boolean().optional(),
             polNaPol: z.object({
               id: z.number(),
             }).optional(),
@@ -188,12 +339,18 @@ export const pizzaRouter = createTRPCRouter({
           pomidorowy: z.number().min(0),
           czosnkowy: z.number().min(0),
         }),
-        napojId: z.number().optional(),
+        napoje: z.array(z.object({
+          id: z.number(),
+          nazwa: z.string(),
+          cena: z.number(),
+        })).optional(),
         pozycjeExtraIds: z.array(z.number()).optional(),
         platnosc: z.enum(["gotowka", "karta"]),
         isKupony: z.boolean().optional(),
         typZamowienia: z.enum(["na_miejscu", "na_wynos", "dowoz"]).optional(),
         skladniki: z.string().optional(),
+        customDeliveryPrice: z.number().optional(),
+        customTotalPrice: z.number().optional(),
       })
       .refine(
         (data) => {
@@ -221,7 +378,7 @@ export const pizzaRouter = createTRPCRouter({
           
           if (pizzaData) {
             let pizzaPrice = 0;
-            const kuponEligible = !!input.isKupony;
+            const kuponEligible = !!pizza.isKupon;
             
             if (kuponEligible) {
               pizzaPrice = pizza.rozmiar === "duza" ? 10 : 0;
@@ -272,12 +429,9 @@ export const pizzaRouter = createTRPCRouter({
         // Cena sosów
         totalPrice += (input.sosy.pomidorowy + input.sosy.czosnkowy) * 2;
 
-        // Cena napoju
-        if (input.napojId) {
-          const napoj = await tx.napoj.findUnique({
-            where: { id: input.napojId },
-          });
-          if (napoj) {
+        // Cena napojów
+        if (input.napoje && input.napoje.length > 0) {
+          for (const napoj of input.napoje) {
             totalPrice += napoj.cena;
           }
         }
@@ -294,40 +448,63 @@ export const pizzaRouter = createTRPCRouter({
           }
         }
 
-        // Dostawa
-        if (input.typZamowienia === "dowoz" && totalPrice < 100) {
-          totalPrice += 5;
+        // Cena dostawy według dzielnicy
+        if (input.typZamowienia === "dowoz") {
+          // Jeśli użytkownik podał własną cenę dostawy, używamy jej
+          if (input.customDeliveryPrice !== undefined) {
+            console.log('Używam niestandardowej ceny dostawy (placeOrder):', input.customDeliveryPrice, 'PLN');
+            totalPrice += input.customDeliveryPrice;
+          } else if (input.adres) {
+            // W przeciwnym razie wyszukujemy cenę na podstawie adresu
+            const adres = input.adres;
+            const firstPart = adres.split(',')[0];
+            const adresParts = firstPart ? firstPart.trim() : adres;
+            const streetMatch = adresParts.match(/^([\D\s]+?)\s*\d*[a-zA-Z]?$/);
+            const streetName = (streetMatch && streetMatch[1]) ? streetMatch[1].trim() : adresParts;
+            
+            console.log('Szukam adresu (placeOrder):', input.adres, '-> nazwa ulicy:', streetName);
+            
+            const ulicaRecord = await tx.ulica.findFirst({
+              where: {
+                ulica: {
+                  contains: streetName,
+                },
+              },
+              include: {
+                dzielnica: true,
+              },
+            });
+
+            console.log('Znaleziono rekord ulicy (placeOrder):', ulicaRecord);
+
+            if (ulicaRecord && ulicaRecord.dzielnica) {
+              console.log('Dodaję cenę dostawy (placeOrder):', ulicaRecord.dzielnica.cena_dzielnica, 'PLN');
+              totalPrice += ulicaRecord.dzielnica.cena_dzielnica;
+            } else {
+              console.log('Nie znaleziono adresu w bazie (placeOrder) - brak opłaty za dowóz');
+            }
+          }
         }
 
         return totalPrice;
       });
 
-      // Upewniamy się, że kolumna is_kupony istnieje (ignoruj błąd jeśli już istnieje)
-      try {
-        await db.$executeRaw`ALTER TABLE zamowienia ADD COLUMN is_kupony INTEGER DEFAULT 0`;
-      } catch (e) {
-        // kolumna już istnieje – ignorujemy
-      }
+      // Użyj customTotalPrice jeśli został podany, w przeciwnym razie użyj obliczonej ceny
+      const finalPrice = input.customTotalPrice !== undefined ? input.customTotalPrice : priceResult;
+      console.log('Finalna cena:', finalPrice, 'PLN (custom:', input.customTotalPrice, ', obliczona:', priceResult, ')');
 
-      // Upewniamy się, że kolumna typ_zamowienia istnieje (ignoruj błąd jeśli już istnieje)
-      try {
-        await db.$executeRaw`ALTER TABLE zamowienia ADD COLUMN typ_zamowienia TEXT DEFAULT NULL`;
-      } catch (e) {
-        // kolumna już istnieje – ignorujemy
-      }
-
-      // Upewniamy się, że kolumna skladniki istnieje (ignoruj błąd jeśli już istnieje)
-      try {
-        await db.$executeRaw`ALTER TABLE zamowienia ADD COLUMN skladniki TEXT DEFAULT NULL`;
-      } catch (e) {
-        // kolumna już istnieje – ignorujemy
-      }
+      // Kolumny już istnieją w nowej strukturze MariaDB - pomijamy ALTER TABLE
 
       // Zapisujemy zamówienie bezpośrednio do tabeli przez raw SQL
       console.log("Zapisywanie zamówienia do bazy...");
+      console.log("=== ZAPISUJĘ DO BAZY ===");
+      console.log("finalPrice:", finalPrice);
+      console.log("priceResult:", priceResult);
+      console.log("input.customTotalPrice:", input.customTotalPrice);
+      console.log("=======================");
       
       // Zapisz do tabeli zamowienia z nową strukturą
-      // Używamy DATETIME('now', 'localtime') dla polskiego czasu
+      // Używamy NOW() dla MariaDB/MySQL
       const insertResult = await db.$executeRaw`
         INSERT INTO zamowienia (
           telefon,
@@ -347,12 +524,12 @@ export const pizzaRouter = createTRPCRouter({
           ${input.adres},
           ${JSON.stringify(input.pizze)},
           ${JSON.stringify(input.sosy)},
-          ${input.napojId ? String(input.napojId) : null},
+          ${input.napoje && input.napoje.length > 0 ? JSON.stringify(input.napoje) : null},
           ${JSON.stringify(input.pozycjeExtraIds)},
           ${input.platnosc},
-          ${priceResult},
-          DATETIME('now', 'localtime'),
-          ${input.isKupony ? 1 : 0},
+          ${finalPrice},
+          NOW(),
+          ${input.pizze.some(p => p.isKupon) ? 1 : 0},
           ${input.typZamowienia},
           ${input.skladniki || null}
         )
@@ -363,7 +540,7 @@ export const pizzaRouter = createTRPCRouter({
       return {
         success: true,
         zamowienieId: Date.now(), // Używamy timestamp jako ID
-        cenaCalkwita: priceResult,
+        cenaCalkwita: finalPrice,
       };
     }),
 });

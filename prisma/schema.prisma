@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./smartpizzapp13-T3.db"
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model Pizza {
@@ -44,9 +44,24 @@ model Napoj {
   @@map("napoje")
 }
 
+model Dzielnica {
+  id              Int     @id @default(autoincrement())
+  cena_dzielnica  Float
+  ulice           Ulica[]
+
+  @@map("dzielnice")
+}
+
 model Ulica {
-  id    Int    @id @default(autoincrement())
-  nazwa String
+  id              Int        @id @default(autoincrement())
+  miejscowosc     String?    @db.Text
+  ulica           String?    @db.Text
+  numer           String?    @db.Text
+  x               String?    @db.Text
+  y               String?    @db.Text
+  id_dzielnica    Int?
+  dzielnica_nazwa String?    @db.Text
+  dzielnica       Dzielnica? @relation(fields: [id_dzielnica], references: [id])
 
   @@map("ulice")
 }
@@ -59,18 +74,20 @@ model PozycjaExtra {
   @@map("pozycje_extra")
 }
 
-// Tabela Zamówienia nie ma klucza głównego, więc używamy tylko raw SQL
-// model Zamowienie {
-//   telefon             Int
-//   adres               String
-//   pizza               Int?
-//   sosy                Int
-//   dodatki             String?
-//   cena                Float
-//   platnosc            String
-//   godzina_otrzymania  String?
-//   sosy_ile            Int?
-//   rozmiar             String?
-//
-//   @@map("Zamówienia")
-// }
+model Zamowienie {
+  id              Int      @id @default(autoincrement())
+  telefon         String?  @db.Text
+  adres           String?  @db.Text
+  pizze           String?  @db.Text
+  sosy            String?  @db.Text
+  napoj           String?  @db.Text
+  pozycje_extra   String?  @db.Text
+  platnosc        String?  @db.Text
+  cena_calkowita  Float?
+  created_at      DateTime? @db.DateTime(0)
+  is_kupony       Int?
+  typ_zamowienia  String?  @db.Text
+  skladniki       String?  @db.Text
+
+  @@map("zamowienia")
+}

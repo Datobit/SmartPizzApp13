@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "~/utils/api";
 
 interface PizzaSelection {
@@ -7,11 +7,18 @@ interface PizzaSelection {
   nazwa: string;
   rozmiar: "mala" | "srednia" | "duza";
   cena: number;
+  isKupon?: boolean; // czy ta konkretna pizza jest z kuponu
   polNaPol?: {
     id: number;
     nazwa: string;
   };
   modifications?: Record<number, number>; // id_skladnik -> zmiana ilości (np. -1, +1)
+}
+
+interface NapojSelection {
+  id: number;
+  nazwa: string;
+  cena: number;
 }
 
 interface OrderData {
@@ -22,7 +29,7 @@ interface OrderData {
     pomidorowy: number;
     czosnkowy: number;
   };
-  napojId?: number;
+  napoje: NapojSelection[];
   pozycjeExtraIds: number[];
   platnosc: "gotowka" | "karta";
 }
@@ -36,20 +43,23 @@ export default function Home() {
     adres: "",
     pizze: [],
     sosy: { pomidorowy: 0, czosnkowy: 0 },
-    napojId: undefined,
+    napoje: [],
     pozycjeExtraIds: [],
     platnosc: "gotowka",
   });
 
   // Oddzielne pola adresu
+  const [miejscowosc, setMiejscowosc] = useState("");
   const [ulica, setUlica] = useState("");
   const [numerDomu, setNumerDomu] = useState("");
+  const [numerMieszkania, setNumerMieszkania] = useState("");
   const [dodatkoweInfo, setDodatkoweInfo] = useState("");
 
   const [selectedPizzas, setSelectedPizzas] = useState<Set<number>>(new Set());
   const [currentPizzaSize, setCurrentPizzaSize] = useState<"mala" | "srednia" | "duza">("mala");
-  const [streetSuggestions, setStreetSuggestions] = useState<string[]>([]);
+  const [streetSuggestions, setStreetSuggestions] = useState<Array<{ ulica: string; dzielnica_nazwa: string }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [totalPrice, setTotalPrice] = useState(0);
   const [showAddPizza, setShowAddPizza] = useState(false);
   const [isPolNaPol, setIsPolNaPol] = useState(false);
@@ -57,6 +67,14 @@ export default function Home() {
   const [showPolNaPolSelector, setShowPolNaPolSelector] = useState(false);
   const [firstPizzaId, setFirstPizzaId] = useState<number | null>(null);
   const [expandedPizzaIndex, setExpandedPizzaIndex] = useState<number | null>(null);
+  const [dzielnicaNazwa, setDzielnicaNazwa] = useState<string>("");
+  const [customDeliveryPrice, setCustomDeliveryPrice] = useState<number | null>(null);
+  const [userManuallyChangedDzielnica, setUserManuallyChangedDzielnica] = useState(false);
+  const [addressNotRecognized, setAddressNotRecognized] = useState(false);
+  const [customTotalPrice, setCustomTotalPrice] = useState<number | null>(null);
+  const [userManuallyChangedPrice, setUserManuallyChangedPrice] = useState(false);
+  
+  const numerDomuInputRef = useRef<HTMLInputElement>(null);
 
   // Queries
   const { data: pizzas, isLoading: pizzasLoading, error: pizzasError } = api.pizza.getAllPizzas.useQuery();
@@ -67,6 +85,15 @@ export default function Home() {
   const searchStreets = api.pizza.searchUlice.useQuery(
     { query: ulica },
     { enabled: ulica.length > 2 }
+  );
+
+  const dzielnicaInfo = api.pizza.getDzielnicaForUlica.useQuery(
+    { miejscowosc: miejscowosc || undefined, ulica: ulica, numer: numerDomu },
+    { 
+      enabled: ulica.length > 0 && numerDomu.length > 0 && typZamowienia === "dowoz",
+      refetchOnMount: true,
+      refetchOnWindowFocus: false,
+    }
   );
 
   // Debug - wyświetl dane w konsoli
@@ -87,44 +114,122 @@ export default function Home() {
   useEffect(() => {
     console.log("Street search data:", searchStreets.data);
     if (searchStreets.data && searchStreets.data.length > 0) {
-      setStreetSuggestions(searchStreets.data.map((street: any) => street.nazwa));
+      // Wyświetlamy ulice z nazwami dzielnic
+      setStreetSuggestions(searchStreets.data.filter((street: any) => street.ulica && street.dzielnica_nazwa));
       setShowSuggestions(true);
+      setSelectedSuggestionIndex(-1); // Resetuj wybrany indeks
     } else {
       setStreetSuggestions([]);
-      if (ulica.length <= 2) {
+      if (ulica.length < 3) {
         setShowSuggestions(false);
       }
+      setSelectedSuggestionIndex(-1);
     }
   }, [searchStreets.data, ulica]);
 
+  // Aktualizuj informacje o dzielnicy
+  useEffect(() => {
+    if (dzielnicaInfo.data && dzielnicaInfo.data.dzielnica_nazwa) {
+      setDzielnicaNazwa(dzielnicaInfo.data.dzielnica_nazwa);
+      // Automatycznie ustaw dzielnicę na podstawie danych z bazy (tylko jeśli użytkownik nie zmienił ręcznie)
+      if (!userManuallyChangedDzielnica) {
+        setMiejscowosc(dzielnicaInfo.data.dzielnica_nazwa);
+        setCustomDeliveryPrice(dzielnicaInfo.data.cena_dzielnica);
+        setAddressNotRecognized(false);
+      } else {
+        // Użytkownik ręcznie zmienił dzielnicę - pokaż ostrzeżenie
+        setAddressNotRecognized(true);
+      }
+    } else {
+      // Adres nie został znaleziony w bazie
+      if (ulica && numerDomu) {
+        setAddressNotRecognized(true);
+      }
+      setDzielnicaNazwa("");
+      if (!userManuallyChangedDzielnica) {
+        setCustomDeliveryPrice(null);
+      }
+    }
+  }, [dzielnicaInfo.data, userManuallyChangedDzielnica, ulica, numerDomu]);
+
   // Aktualizuj pełny adres przy zmianie pól
   useEffect(() => {
-    const parts = [ulica, numerDomu, dodatkoweInfo].filter(p => p.trim());
-    const fullAddress = parts.join(", ");
+    const addressParts = [ulica, numerDomu];
+    if (numerMieszkania) {
+      addressParts.push(`m. ${numerMieszkania}`);
+    }
+    if (dodatkoweInfo) {
+      addressParts.push(dodatkoweInfo);
+    }
+    const fullAddress = addressParts.filter(p => p).join(", ");
     setOrderData(prev => ({ ...prev, adres: fullAddress }));
-  }, [ulica, numerDomu, dodatkoweInfo]);
+  }, [ulica, numerDomu, numerMieszkania, dodatkoweInfo]);
+
+  // useQuery automatycznie odpytuje gdy zmienią się parametry (ulica, numerDomu, miejscowosc)
 
   // Kalkuluj cenę na żywo
   useEffect(() => {
-    if (orderData.pizze.length > 0 || orderData.napojId || orderData.pozycjeExtraIds.length > 0 || orderData.sosy.pomidorowy > 0 || orderData.sosy.czosnkowy > 0) {
-      calculatePriceMutation.mutate({
-        pizze: orderData.pizze.map(p => ({ 
-          id: p.id, 
-          rozmiar: p.rozmiar,
-          polNaPol: p.polNaPol
-        })),
+    // Przeliczaj cenę zawsze gdy są produkty LUB gdy jest typ dowozu (żeby uwzględnić cenę dostawy)
+    const shouldCalculate = orderData.pizze.length > 0 || orderData.napoje.length > 0 || orderData.pozycjeExtraIds.length > 0 || orderData.sosy.pomidorowy > 0 || orderData.sosy.czosnkowy > 0 || typZamowienia === "dowoz";
+    
+    console.log("=== useEffect przeliczanie ceny ===");
+    console.log("shouldCalculate:", shouldCalculate);
+    console.log("customDeliveryPrice:", customDeliveryPrice);
+    console.log("typZamowienia:", typZamowienia);
+    console.log("ulica:", ulica, "numerDomu:", numerDomu);
+    console.log("orderData.napoje:", orderData.napoje);
+    console.log("orderData.pizze:", orderData.pizze);
+    orderData.pizze.forEach((p, i) => {
+      console.log(`  Pizza ${i}: ${p.nazwa}, rozmiar: ${p.rozmiar}, cena: ${p.cena}, isKupon: ${p.isKupon}`);
+    });
+    
+    if (shouldCalculate) {
+      // Buduj adres z oddzielnych pól
+      const fullAddress = [ulica, numerDomu, numerMieszkania ? `m. ${numerMieszkania}` : '', dodatkoweInfo].filter(Boolean).join(', ');
+      console.log("Przeliczam cenę, fullAddress:", fullAddress);
+      
+      const payload = {
+        pizze: orderData.pizze.map(p => { 
+          const pizzaPayload = {
+            id: p.id, 
+            rozmiar: p.rozmiar,
+            isKupon: p.isKupon,
+            polNaPol: p.polNaPol
+          };
+          console.log("Pizza payload:", p.nazwa, "isKupon:", p.isKupon, "payload:", pizzaPayload);
+          return pizzaPayload;
+        }),
         sosy: orderData.sosy,
-        napojId: orderData.napojId,
+        napoje: orderData.napoje,
         pozycjeExtraIds: orderData.pozycjeExtraIds,
         isKupony: isKupony,
         typZamowienia: typZamowienia,
-      }, {
-        onSuccess: (data) => setTotalPrice(data.totalPrice),
+        adres: fullAddress,
+        customDeliveryPrice: customDeliveryPrice ?? undefined,
+      };
+      console.log("Payload wysyłany do calculatePrice:", payload);
+      
+      calculatePriceMutation.mutate(payload, {
+        onSuccess: (data) => {
+          console.log("calculatePrice onSuccess, zwrócona cena:", data.totalPrice);
+          console.log("userManuallyChangedPrice:", userManuallyChangedPrice);
+          if (!userManuallyChangedPrice) {
+            console.log("Ustawiam totalPrice na:", data.totalPrice);
+            setTotalPrice(data.totalPrice);
+            setCustomTotalPrice(data.totalPrice);
+          } else {
+            console.log("Nie aktualizuję ceny - użytkownik ją zmienił ręcznie");
+          }
+        },
       });
     } else {
-      setTotalPrice(0);
+      if (!userManuallyChangedPrice) {
+        setTotalPrice(0);
+        setCustomTotalPrice(0);
+      }
     }
-  }, [orderData, isKupony, typZamowienia]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderData, isKupony, typZamowienia, ulica, numerDomu, numerMieszkania, dodatkoweInfo, miejscowosc]);
 
   const handlePizzaSelect = (pizzaId: number) => {
     const pizza = pizzas?.find((p: any) => p.id === pizzaId);
@@ -141,7 +246,9 @@ export default function Home() {
         nazwa: pizza.nazwa,
         rozmiar,
         cena,
+        isKupon: true, // oznacz tę pizzę jako kuponową
       };
+      console.log("DODAJĘ PIZZĘ KUPONOWĄ:", newPizza);
       setOrderData(prev => ({
         ...prev,
         pizze: [...prev.pizze, newPizza],
@@ -149,6 +256,7 @@ export default function Home() {
       setSelectedPizzas(new Set());
       setCurrentPizzaSize("srednia");
       setShowAddPizza(false);
+      setIsKupony(false); // reset checkbox after adding
       return;
     }
 
@@ -223,9 +331,15 @@ export default function Home() {
     }));
   };
 
-  const handleStreetSelect = (street: string) => {
-    setUlica(street);
+  const handleStreetSelect = (suggestion: { ulica: string; dzielnica_nazwa: string }) => {
+    setUlica(suggestion.ulica);
+    setMiejscowosc(suggestion.dzielnica_nazwa);
     setShowSuggestions(false);
+    setSelectedSuggestionIndex(-1);
+    // Automatycznie przenosimy focus na pole numer domu
+    setTimeout(() => {
+      numerDomuInputRef.current?.focus();
+    }, 0);
   };
 
   const resetForm = () => {
@@ -234,14 +348,19 @@ export default function Home() {
       adres: "",
       pizze: [],
       sosy: { pomidorowy: 0, czosnkowy: 0 },
-      napojId: undefined,
+      napoje: [],
       pozycjeExtraIds: [],
       platnosc: "gotowka",
     });
     setUlica("");
     setNumerDomu("");
+    setNumerMieszkania("");
     setDodatkoweInfo("");
+    setMiejscowosc("");
     setTotalPrice(0);
+    setCustomDeliveryPrice(null);
+    setUserManuallyChangedDzielnica(false);
+    setAddressNotRecognized(false);
     setSelectedPizzas(new Set());
     setShowSuggestions(false);
     setStreetSuggestions([]);
@@ -363,29 +482,42 @@ export default function Home() {
 
     try {
       console.log("Składanie zamówienia:", orderData);
+      console.log("Flaga ręcznej zmiany ceny:", userManuallyChangedPrice);
+      console.log("Wartość customTotalPrice:", customTotalPrice);
+      console.log("Wartość totalPrice:", totalPrice);
       
-      const result = await placeOrderMutation.mutateAsync({
+      const orderPayload = {
         telefon: orderData.telefon,
         adres: orderData.adres,
         pizze: orderData.pizze.map(p => ({ 
           id: p.id, 
           rozmiar: p.rozmiar,
+          isKupon: p.isKupon,
           polNaPol: p.polNaPol
         })),
         sosy: orderData.sosy,
-        napojId: orderData.napojId,
+        napoje: orderData.napoje,
         pozycjeExtraIds: orderData.pozycjeExtraIds,
         platnosc: orderData.platnosc,
         isKupony: isKupony,
         typZamowienia: typZamowienia,
         skladniki: generateSkladnikiString(),
-      });
+        customDeliveryPrice: customDeliveryPrice ?? undefined,
+        customTotalPrice: userManuallyChangedPrice ? (customTotalPrice ?? undefined) : undefined,
+      };
+      
+      console.log("Wysyłam dane zamówienia:", orderPayload);
+      
+      const result = await placeOrderMutation.mutateAsync(orderPayload);
 
       console.log("Wynik zamówienia:", result);
       
       if (result && result.success) {
         alert(`✅ Zamówienie złożone pomyślnie! Cena: ${result.cenaCalkwita} PLN`);
         resetForm();
+        // Resetuj również flagi ceny po pomyślnym złożeniu zamówienia
+        setCustomTotalPrice(null);
+        setUserManuallyChangedPrice(false);
       } else {
         alert("❌ Błąd podczas składania zamówienia");
       }
@@ -467,10 +599,14 @@ export default function Home() {
                 </label>
                 <input
                   type="tel"
-                  value={orderData.telefon}
-                  onChange={(e) => setOrderData(prev => ({ ...prev, telefon: e.target.value }))}
+                  value={orderData.telefon.replace(/(\d{3})(?=\d)/g, '$1 ')}
+                  onChange={(e) => {
+                    // Usuń wszystkie spacje i zachowaj tylko cyfry
+                    const cleanValue = e.target.value.replace(/\s/g, '');
+                    setOrderData(prev => ({ ...prev, telefon: cleanValue }));
+                  }}
                   className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                  placeholder="123456789"
+                  placeholder="123 456 789"
                   required
                 />
               </div>
@@ -480,43 +616,147 @@ export default function Home() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Adres dostawy
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Klaster/Dzielnica */}
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Dzielnica
+                  </label>
+                  <select
+                    value={miejscowosc}
+                    onChange={(e) => {
+                      const newMiejscowosc = e.target.value;
+                      setMiejscowosc(newMiejscowosc);
+                      // Oznacz że użytkownik ręcznie zmienił dzielnicę
+                      setUserManuallyChangedDzielnica(true);
+                      setAddressNotRecognized(true);
+                      // Reset ceny przy ręcznej zmianie dzielnicy
+                      setCustomDeliveryPrice(null);
+                    }}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">-- Wybierz dzielnicę --</option>
+                    <option value="Południe">Południe (0 PLN)</option>
+                    <option value="Kazimierza Wlk.-Śródmieście">Kazimierza Wlk.-Śródmieście (5 PLN)</option>
+                    <option value="Michelin">Michelin (5 PLN)</option>
+                    <option value="Zazamcze">Zazamcze (5 PLN)</option>
+                    <option value="Płocka">Płocka (7 PLN)</option>
+                    <option value="Zawiśle">Zawiśle (7 PLN)</option>
+                    <option value="Nowa Wieś">Nowa Wieś (10 PLN)</option>
+                    <option value="Rybnica">Rybnica (10 PLN)</option>
+                    <option value="Szpetal Górny">Szpetal Górny (10 PLN)</option>
+                    <option value="Toruńska-Anwil">Toruńska-Anwil (10 PLN)</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   {/* Ulica z podpowiedziami */}
                   <div className="relative md:col-span-2">
                     <input
                       type="text"
                       value={ulica}
-                      onChange={(e) => setUlica(e.target.value)}
-                      onFocus={() => setShowSuggestions(true)}
+                      onChange={(e) => {
+                        setUlica(e.target.value);
+                        // Reset dzielnicy przy zmianie ulicy - aby backend szukał we wszystkich dzielnicach
+                        setMiejscowosc("");
+                        setUserManuallyChangedDzielnica(false);
+                        setAddressNotRecognized(false);
+                      }}
+                      onFocus={() => {
+                        // Pokaż sugestie tylko jeśli użytkownik wpisuje coś nowego
+                        if (ulica.length >= 3 && streetSuggestions.length > 0) {
+                          setShowSuggestions(true);
+                        }
+                      }}
+                      onBlur={() => {
+                        // Ukryj sugestie po opuszczeniu pola (z małym opóźnieniem dla kliknięć)
+                        setTimeout(() => {
+                          setShowSuggestions(false);
+                          setSelectedSuggestionIndex(-1);
+                        }, 200);
+                      }}
+                      onKeyDown={(e) => {
+                        if (!showSuggestions || streetSuggestions.length === 0) return;
+                        
+                        if (e.key === 'Tab') {
+                          e.preventDefault();
+                          // Przejść do następnej sugestii
+                          setSelectedSuggestionIndex((prev) => {
+                            const next = prev + 1;
+                            return next >= streetSuggestions.length ? 0 : next;
+                          });
+                        } else if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex((prev) => {
+                            const next = prev + 1;
+                            return next >= streetSuggestions.length ? 0 : next;
+                          });
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex((prev) => {
+                            const next = prev - 1;
+                            return next < 0 ? streetSuggestions.length - 1 : next;
+                          });
+                        } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+                          e.preventDefault();
+                          const selected = streetSuggestions[selectedSuggestionIndex];
+                          if (selected) handleStreetSelect(selected);
+                        } else if (e.key === 'Escape') {
+                          setShowSuggestions(false);
+                          setSelectedSuggestionIndex(-1);
+                        }
+                      }}
                       className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                       placeholder="Nazwa ulicy..."
                       required
                     />
                     {showSuggestions && streetSuggestions.length > 0 && (
-                      <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
-                        {streetSuggestions.map((street, index) => (
+                      <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-96 overflow-y-auto">
+                        {streetSuggestions.map((suggestion, index) => (
                           <button
                             key={index}
                             type="button"
-                            onClick={() => handleStreetSelect(street)}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-100"
+                            onClick={() => handleStreetSelect(suggestion)}
+                            className={`w-full text-left px-3 py-2 transition-colors flex justify-between items-center ${
+                              index === selectedSuggestionIndex
+                                ? 'bg-blue-50 border-2 border-blue-400 border-opacity-50'
+                                : 'hover:bg-gray-100 border-2 border-transparent'
+                            }`}
                           >
-                            {street}
+                            <span className="font-medium">{suggestion.ulica}</span>
+                            <span className="text-sm text-gray-600 ml-2">({suggestion.dzielnica_nazwa})</span>
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
 
-                  {/* Numer domu/bloku */}
+                  {/* Numer */}
+                  <div>
+                    <input
+                      ref={numerDomuInputRef}
+                      type="text"
+                      value={numerDomu}
+                      onChange={(e) => {
+                        setNumerDomu(e.target.value);
+                        // Reset dzielnicy przy zmianie numeru - aby backend szukał we wszystkich dzielnicach
+                        setMiejscowosc("");
+                        setUserManuallyChangedDzielnica(false);
+                        setAddressNotRecognized(false);
+                      }}
+                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                      placeholder="Numer"
+                      required
+                    />
+                  </div>
+                  
+                  {/* Mieszkanie */}
                   <div>
                     <input
                       type="text"
-                      value={numerDomu}
-                      onChange={(e) => setNumerDomu(e.target.value)}
+                      value={numerMieszkania}
+                      onChange={(e) => setNumerMieszkania(e.target.value)}
                       className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                      placeholder="Nr domu"
-                      required
+                      placeholder="Mieszkanie"
                     />
                   </div>
                 </div>
@@ -528,9 +768,51 @@ export default function Home() {
                     value={dodatkoweInfo}
                     onChange={(e) => setDodatkoweInfo(e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                    placeholder="Dodatkowe informacje (np. nr mieszkania, piętro, kod domofonu)"
+                    placeholder="Dodatkowe informacje (np. piętro, kod domofonu)"
                   />
                 </div>
+
+                {/* Informacja o dzielnicy i cena dostawy - zawsze widoczne dla dowozu */}
+                {typZamowienia === "dowoz" && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-gray-700">Dowóz: </span>
+                        <span className="text-sm font-semibold text-blue-700">
+                          {dzielnicaNazwa || miejscowosc || "nie rozpoznano"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-gray-700">Cena dostawy:</label>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={customDeliveryPrice ?? ""}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "") {
+                              setCustomDeliveryPrice(null);
+                            } else {
+                              setCustomDeliveryPrice(parseInt(value) || 0);
+                            }
+                          }}
+                          className="w-24 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                          placeholder="0"
+                        />
+                        <span className="text-sm font-medium text-gray-700">PLN</span>
+                      </div>
+                    </div>
+                    
+                    {/* Ostrzeżenie gdy adres nie został rozpoznany */}
+                    {addressNotRecognized && (
+                      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-300 rounded-md">
+                        <p className="text-sm font-semibold text-yellow-800">⚠️ UWAGA! Adres nie został rozpoznany.</p>
+                        <p className="text-sm text-yellow-700">Cena musi zostać wprowadzona ręcznie.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               </div>
             )}
@@ -541,7 +823,10 @@ export default function Home() {
               {orderData.pizze.map((pizza, index) => (
                 <div key={index} className="bg-gray-50 p-3 rounded mb-2">
                   <div className="flex justify-between items-center">
-                    <span>{pizza.nazwa} - {pizza.rozmiar} ({pizza.cena} PLN)</span>
+                    <span>
+                      {pizza.nazwa} - {pizza.rozmiar} ({pizza.cena} PLN)
+                      {pizza.isKupon && <span className="ml-2 text-green-600 font-semibold">(KUPON)</span>}
+                    </span>
                     <div className="flex space-x-2">
                       <button
                         type="button"
@@ -646,27 +931,27 @@ export default function Home() {
                   <div className="flex space-x-4">
                     {isKupony ? (
                       <>
-                        <label className="flex items-center">
+                        <label className="flex items-center cursor-pointer">
                           <input
                             type="radio"
                             name="size"
                             value="srednia"
                             checked={currentPizzaSize === "srednia"}
                             onChange={() => setCurrentPizzaSize("srednia")}
-                            className="mr-2"
+                            className="mr-2 w-5 h-5 cursor-pointer"
                           />
-                          Średnia (0 zł)
+                          <span className="text-lg">Średnia (0 zł)</span>
                         </label>
-                        <label className="flex items-center">
+                        <label className="flex items-center cursor-pointer">
                           <input
                             type="radio"
                             name="size"
                             value="duza"
                             checked={currentPizzaSize === "duza"}
                             onChange={() => setCurrentPizzaSize("duza")}
-                            className="mr-2"
+                            className="mr-2 w-5 h-5 cursor-pointer"
                           />
-                          Duża (+10 zł)
+                          <span className="text-lg">Duża (+10 zł)</span>
                         </label>
                       </>
                     ) : (
@@ -675,16 +960,16 @@ export default function Home() {
                         { key: "srednia", label: "Średnia" },
                         { key: "duza", label: "Duża" }
                       ].map(size => (
-                        <label key={size.key} className="flex items-center">
+                        <label key={size.key} className="flex items-center cursor-pointer">
                           <input
                             type="radio"
                             name="size"
                             value={size.key}
                             checked={currentPizzaSize === size.key}
                             onChange={(e) => setCurrentPizzaSize(e.target.value as "mala" | "srednia" | "duza")}
-                            className="mr-2"
+                            className="mr-2 w-5 h-5 cursor-pointer"
                           />
-                          {size.label}
+                          <span className="text-lg">{size.label}</span>
                         </label>
                       ))
                     )}
@@ -768,31 +1053,57 @@ export default function Home() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Sos pomidorowy
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={orderData.sosy.pomidorowy}
-                    onChange={(e) => setOrderData(prev => ({
-                      ...prev,
-                      sosy: { ...prev.sosy, pomidorowy: parseInt(e.target.value) || 0 }
-                    }))}
-                    className="w-full p-3 border border-gray-300 rounded-md"
-                  />
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setOrderData(prev => ({
+                        ...prev,
+                        sosy: { ...prev.sosy, pomidorowy: Math.max(0, prev.sosy.pomidorowy - 1) }
+                      }))}
+                      className="w-12 h-12 bg-red-500 text-white rounded-md text-2xl font-bold hover:bg-red-600 transition-colors"
+                    >
+                      −
+                    </button>
+                    <span className="text-2xl font-bold w-12 text-center">{orderData.sosy.pomidorowy}</span>
+                    <button
+                      type="button"
+                      onClick={() => setOrderData(prev => ({
+                        ...prev,
+                        sosy: { ...prev.sosy, pomidorowy: prev.sosy.pomidorowy + 1 }
+                      }))}
+                      className="w-12 h-12 bg-green-500 text-white rounded-md text-2xl font-bold hover:bg-green-600 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Sos czosnkowy
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={orderData.sosy.czosnkowy}
-                    onChange={(e) => setOrderData(prev => ({
-                      ...prev,
-                      sosy: { ...prev.sosy, czosnkowy: parseInt(e.target.value) || 0 }
-                    }))}
-                    className="w-full p-3 border border-gray-300 rounded-md"
-                  />
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setOrderData(prev => ({
+                        ...prev,
+                        sosy: { ...prev.sosy, czosnkowy: Math.max(0, prev.sosy.czosnkowy - 1) }
+                      }))}
+                      className="w-12 h-12 bg-red-500 text-white rounded-md text-2xl font-bold hover:bg-red-600 transition-colors"
+                    >
+                      −
+                    </button>
+                    <span className="text-2xl font-bold w-12 text-center">{orderData.sosy.czosnkowy}</span>
+                    <button
+                      type="button"
+                      onClick={() => setOrderData(prev => ({
+                        ...prev,
+                        sosy: { ...prev.sosy, czosnkowy: prev.sosy.czosnkowy + 1 }
+                      }))}
+                      className="w-12 h-12 bg-green-500 text-white rounded-md text-2xl font-bold hover:bg-green-600 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -826,26 +1137,63 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Napój */}
+            {/* Napoje */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Napój (opcjonalnie)
-              </label>
-              <select
-                value={orderData.napojId || ""}
-                onChange={(e) => setOrderData(prev => ({
-                  ...prev,
-                  napojId: e.target.value ? parseInt(e.target.value) : undefined
-                }))}
-                className="w-full p-3 border border-gray-300 rounded-md"
-              >
-                <option value="">-- Wybierz napój --</option>
-                {napoje?.map((napoj: any) => (
-                  <option key={napoj.id} value={napoj.id}>
-                    {napoj.nazwa} - {napoj.cena} PLN
-                  </option>
-                ))}
-              </select>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Napoje (opcjonalnie)</h3>
+              
+              {/* Lista wybranych napojów */}
+              {orderData.napoje.length > 0 && (
+                <div className="mb-4 space-y-2">
+                  {orderData.napoje.map((napoj, index) => (
+                    <div key={index} className="flex items-center justify-between bg-blue-50 p-3 rounded-md">
+                      <span className="font-medium">{napoj.nazwa} - {napoj.cena} PLN</span>
+                      <button
+                        type="button"
+                        onClick={() => setOrderData(prev => ({
+                          ...prev,
+                          napoje: prev.napoje.filter((_, i) => i !== index)
+                        }))}
+                        className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                      >
+                        Usuń
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Wybór napoju - zawsze pokazuj select */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {orderData.napoje.length === 0 ? 'Wybierz napój' : 'Dodaj kolejny napój'}
+                </label>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const selectedNapoj = napoje?.find((n: any) => n.id === parseInt(e.target.value));
+                      if (selectedNapoj) {
+                        setOrderData(prev => ({
+                          ...prev,
+                          napoje: [...prev.napoje, { 
+                            id: selectedNapoj.id, 
+                            nazwa: selectedNapoj.nazwa, 
+                            cena: selectedNapoj.cena 
+                          }]
+                        }));
+                      }
+                    }
+                  }}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Wybierz napój --</option>
+                  {napoje?.map((napoj: any) => (
+                    <option key={napoj.id} value={napoj.id}>
+                      {napoj.nazwa} - {napoj.cena} PLN
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Płatność */}
@@ -879,14 +1227,32 @@ export default function Home() {
 
             {/* Podsumowanie ceny */}
             <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-xl font-bold text-center">
-                Cena całkowita: {totalPrice.toFixed(2)} PLN
+              <div className="flex items-center justify-center gap-3">
+                <label className="text-xl font-bold">Cena całkowita:</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={userManuallyChangedPrice ? (customTotalPrice?.toString() ?? totalPrice.toFixed(2)) : totalPrice.toFixed(2)}
+                  onChange={(e) => {
+                    const inputValue = e.target.value;
+                    // Pozwól na puste pole lub cyfry z kropką/przecinkiem
+                    if (inputValue === '' || /^\d*[.,]?\d*$/.test(inputValue)) {
+                      const value = inputValue === '' ? 0 : parseFloat(inputValue.replace(',', '.'));
+                      setCustomTotalPrice(value);
+                      setTotalPrice(value);
+                      setUserManuallyChangedPrice(true);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Po opuszczeniu pola sformatuj wartość
+                    const value = parseFloat(e.target.value.replace(',', '.')) || 0;
+                    setCustomTotalPrice(value);
+                    setTotalPrice(value);
+                  }}
+                  className="w-32 p-2 text-xl font-bold text-center border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-xl font-bold">PLN</span>
               </div>
-              {totalPrice > 0 && totalPrice < 100 && (
-                <div className="text-sm text-gray-600 text-center mt-2">
-                  (zawiera 5 PLN za dostawę)
-                </div>
-              )}
             </div>
 
             {/* Przyciski akcji */}
