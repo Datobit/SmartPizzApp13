@@ -52,41 +52,25 @@ export const pizzaRouter = createTRPCRouter({
             contains: input.query,
           },
         },
+        distinct: ['ulica', 'dzielnica_nazwa'], // Zwracamy unikalne pary ulica + dzielnica
         select: {
           ulica: true,
           dzielnica_nazwa: true,
         },
-        take: 400,
+        take: 50, // Pobieramy więcej, aby potem posortować
       });
       
-      // Filtrujemy tylko te z ulicą i dzielnicą, deduplikujemy według ulica+dzielnica
-      const seen = new Set<string>();
-      const unique: Array<{ ulica: string; dzielnica_nazwa: string }> = [];
-      
-      for (const u of ulice) {
-        if (u.ulica && u.dzielnica_nazwa) {
-          const key = `${u.ulica}|||${u.dzielnica_nazwa}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            unique.push({ ulica: u.ulica, dzielnica_nazwa: u.dzielnica_nazwa });
-          }
-        }
-      }
-      
-      // Sortujemy: najpierw te zaczynające się od zapytania, potem reszta alfabetycznie
-      const sorted = unique.sort((a, b) => {
-        const queryLower = input.query.toLowerCase();
-        const aStartsWith = a.ulica.toLowerCase().startsWith(queryLower);
-        const bStartsWith = b.ulica.toLowerCase().startsWith(queryLower);
+      // Sortujemy: najpierw ulice zaczynające się od wpisanej frazy, potem pozostałe
+      const sorted = ulice.sort((a, b) => {
+        const aStartsWith = a.ulica?.toLowerCase().startsWith(input.query.toLowerCase()) ?? false;
+        const bStartsWith = b.ulica?.toLowerCase().startsWith(input.query.toLowerCase()) ?? false;
         
         if (aStartsWith && !bStartsWith) return -1;
         if (!aStartsWith && bStartsWith) return 1;
         
-        // Jeśli obie zaczynają się lub obie nie, sortuj alfabetycznie
-        const ulicaCompare = a.ulica.localeCompare(b.ulica, 'pl');
-        if (ulicaCompare !== 0) return ulicaCompare;
-        return a.dzielnica_nazwa.localeCompare(b.dzielnica_nazwa, 'pl');
-      }).slice(0, 15);
+        // Jeśli obie zaczynają się lub obie nie zaczynają się, sortuj alfabetycznie
+        return (a.ulica ?? '').localeCompare(b.ulica ?? '', 'pl');
+      }).slice(0, 10); // Bierzemy tylko 10 pierwszych wyników
       
       console.log("Search query:", input.query, "Found unique streets:", sorted.length, sorted);
       return sorted;
@@ -166,7 +150,7 @@ export const pizzaRouter = createTRPCRouter({
           z.object({
             id: z.number(),
             rozmiar: z.enum(["mala", "srednia", "duza"]),
-            isKupon: z.boolean().optional(),
+            isKupony: z.boolean().optional(),
             polNaPol: z.object({
               id: z.number(),
             }).optional(),
@@ -176,11 +160,7 @@ export const pizzaRouter = createTRPCRouter({
           pomidorowy: z.number().min(0),
           czosnkowy: z.number().min(0),
         }),
-        napoje: z.array(z.object({
-          id: z.number(),
-          nazwa: z.string(),
-          cena: z.number(),
-        })).optional(),
+        napojeIds: z.array(z.number()).optional(),
         pozycjeExtraIds: z.array(z.number()).optional(),
         isKupony: z.boolean().optional(),
         typZamowienia: z.enum(["na_miejscu", "na_wynos", "dowoz"]).optional(),
@@ -199,13 +179,11 @@ export const pizzaRouter = createTRPCRouter({
         
         if (pizzaData) {
           let pizzaPrice = 0;
-          const kuponEligible = !!pizza.isKupon;
-          console.log(`Backend calculatePrice - Pizza ${pizzaData.nazwa}, rozmiar: ${pizza.rozmiar}, isKupon: ${pizza.isKupon}, kuponEligible: ${kuponEligible}`);
+          const kuponEligible = !!pizza.isKupony;
           
           if (kuponEligible) {
             // Kupony: średnia 0 zł, duża 10 zł
             pizzaPrice = pizza.rozmiar === "duza" ? 10 : 0;
-            console.log(`  -> Cena kuponowa: ${pizzaPrice} PLN`);
           } else {
             // Bazowa cena pizzy
             switch (pizza.rozmiar) {
@@ -219,7 +197,6 @@ export const pizzaRouter = createTRPCRouter({
                 pizzaPrice = pizzaData.cena_duza;
                 break;
             }
-            console.log(`  -> Cena normalna: ${pizzaPrice} PLN`);
           }
           
           // Jeśli to pizza pół na pół
@@ -255,15 +232,18 @@ export const pizzaRouter = createTRPCRouter({
       totalPrice += (input.sosy.pomidorowy + input.sosy.czosnkowy) * 2;
 
       // Cena napojów
-      console.log('calculatePrice - input.napoje:', input.napoje);
-      if (input.napoje && input.napoje.length > 0) {
-        console.log('calculatePrice - Dodaję napoje, ilość:', input.napoje.length);
-        for (const napoj of input.napoje) {
-          console.log('calculatePrice - Napoj:', napoj, 'cena:', napoj.cena);
-          totalPrice += napoj.cena;
+      console.log("Napoje IDs:", input.napojeIds);
+      if (input.napojeIds && input.napojeIds.length > 0) {
+        for (const napojId of input.napojeIds) {
+          const napoj = await db.napoj.findUnique({
+            where: { id: napojId },
+          });
+          console.log(`Napój ${napojId}:`, napoj);
+          if (napoj) {
+            totalPrice += napoj.cena;
+            console.log(`Dodano napój ${napoj.nazwa}, cena: ${napoj.cena}, total: ${totalPrice}`);
+          }
         }
-      } else {
-        console.log('calculatePrice - Brak napojów lub pusta tablica');
       }
 
       // Cena pozycji extra
@@ -329,7 +309,7 @@ export const pizzaRouter = createTRPCRouter({
           z.object({
             id: z.number(),
             rozmiar: z.enum(["mala", "srednia", "duza"]),
-            isKupon: z.boolean().optional(),
+            isKupony: z.boolean().optional(),
             polNaPol: z.object({
               id: z.number(),
             }).optional(),
@@ -339,18 +319,13 @@ export const pizzaRouter = createTRPCRouter({
           pomidorowy: z.number().min(0),
           czosnkowy: z.number().min(0),
         }),
-        napoje: z.array(z.object({
-          id: z.number(),
-          nazwa: z.string(),
-          cena: z.number(),
-        })).optional(),
+        napojeIds: z.array(z.number()).optional(),
         pozycjeExtraIds: z.array(z.number()).optional(),
         platnosc: z.enum(["gotowka", "karta"]),
         isKupony: z.boolean().optional(),
         typZamowienia: z.enum(["na_miejscu", "na_wynos", "dowoz"]).optional(),
         skladniki: z.string().optional(),
         customDeliveryPrice: z.number().optional(),
-        customTotalPrice: z.number().optional(),
       })
       .refine(
         (data) => {
@@ -378,7 +353,7 @@ export const pizzaRouter = createTRPCRouter({
           
           if (pizzaData) {
             let pizzaPrice = 0;
-            const kuponEligible = !!pizza.isKupon;
+            const kuponEligible = !!pizza.isKupony;
             
             if (kuponEligible) {
               pizzaPrice = pizza.rozmiar === "duza" ? 10 : 0;
@@ -430,9 +405,17 @@ export const pizzaRouter = createTRPCRouter({
         totalPrice += (input.sosy.pomidorowy + input.sosy.czosnkowy) * 2;
 
         // Cena napojów
-        if (input.napoje && input.napoje.length > 0) {
-          for (const napoj of input.napoje) {
-            totalPrice += napoj.cena;
+        console.log("CreateOrder - Napoje IDs:", input.napojeIds);
+        if (input.napojeIds && input.napojeIds.length > 0) {
+          for (const napojId of input.napojeIds) {
+            const napoj = await tx.napoj.findUnique({
+              where: { id: napojId },
+            });
+            console.log(`CreateOrder - Napój ${napojId}:`, napoj);
+            if (napoj) {
+              totalPrice += napoj.cena;
+              console.log(`CreateOrder - Dodano napój ${napoj.nazwa}, cena: ${napoj.cena}, total: ${totalPrice}`);
+            }
           }
         }
 
@@ -489,19 +472,10 @@ export const pizzaRouter = createTRPCRouter({
         return totalPrice;
       });
 
-      // Użyj customTotalPrice jeśli został podany, w przeciwnym razie użyj obliczonej ceny
-      const finalPrice = input.customTotalPrice !== undefined ? input.customTotalPrice : priceResult;
-      console.log('Finalna cena:', finalPrice, 'PLN (custom:', input.customTotalPrice, ', obliczona:', priceResult, ')');
-
       // Kolumny już istnieją w nowej strukturze MariaDB - pomijamy ALTER TABLE
 
       // Zapisujemy zamówienie bezpośrednio do tabeli przez raw SQL
       console.log("Zapisywanie zamówienia do bazy...");
-      console.log("=== ZAPISUJĘ DO BAZY ===");
-      console.log("finalPrice:", finalPrice);
-      console.log("priceResult:", priceResult);
-      console.log("input.customTotalPrice:", input.customTotalPrice);
-      console.log("=======================");
       
       // Zapisz do tabeli zamowienia z nową strukturą
       // Używamy NOW() dla MariaDB/MySQL
@@ -524,12 +498,12 @@ export const pizzaRouter = createTRPCRouter({
           ${input.adres},
           ${JSON.stringify(input.pizze)},
           ${JSON.stringify(input.sosy)},
-          ${input.napoje && input.napoje.length > 0 ? JSON.stringify(input.napoje) : null},
+          ${input.napojeIds && input.napojeIds.length > 0 ? JSON.stringify(input.napojeIds) : null},
           ${JSON.stringify(input.pozycjeExtraIds)},
           ${input.platnosc},
-          ${finalPrice},
+          ${priceResult},
           NOW(),
-          ${input.pizze.some(p => p.isKupon) ? 1 : 0},
+          ${input.isKupony ? 1 : 0},
           ${input.typZamowienia},
           ${input.skladniki || null}
         )
@@ -540,7 +514,7 @@ export const pizzaRouter = createTRPCRouter({
       return {
         success: true,
         zamowienieId: Date.now(), // Używamy timestamp jako ID
-        cenaCalkwita: finalPrice,
+        cenaCalkwita: priceResult,
       };
     }),
 });

@@ -7,18 +7,12 @@ interface PizzaSelection {
   nazwa: string;
   rozmiar: "mala" | "srednia" | "duza";
   cena: number;
-  isKupon?: boolean; // czy ta konkretna pizza jest z kuponu
+  isKupony: boolean;
   polNaPol?: {
     id: number;
     nazwa: string;
   };
   modifications?: Record<number, number>; // id_skladnik -> zmiana ilości (np. -1, +1)
-}
-
-interface NapojSelection {
-  id: number;
-  nazwa: string;
-  cena: number;
 }
 
 interface OrderData {
@@ -29,7 +23,7 @@ interface OrderData {
     pomidorowy: number;
     czosnkowy: number;
   };
-  napoje: NapojSelection[];
+  napojeIds: number[];
   pozycjeExtraIds: number[];
   platnosc: "gotowka" | "karta";
 }
@@ -43,7 +37,7 @@ export default function Home() {
     adres: "",
     pizze: [],
     sosy: { pomidorowy: 0, czosnkowy: 0 },
-    napoje: [],
+    napojeIds: [],
     pozycjeExtraIds: [],
     platnosc: "gotowka",
   });
@@ -56,8 +50,8 @@ export default function Home() {
   const [dodatkoweInfo, setDodatkoweInfo] = useState("");
 
   const [selectedPizzas, setSelectedPizzas] = useState<Set<number>>(new Set());
-  const [currentPizzaSize, setCurrentPizzaSize] = useState<"mala" | "srednia" | "duza">("mala");
-  const [streetSuggestions, setStreetSuggestions] = useState<Array<{ ulica: string; dzielnica_nazwa: string }>>([]);
+  const [currentPizzaSize, setCurrentPizzaSize] = useState<"mala" | "srednia" | "duza">("duza");
+  const [streetSuggestions, setStreetSuggestions] = useState<{ulica: string, dzielnica_nazwa: string}[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [totalPrice, setTotalPrice] = useState(0);
@@ -71,8 +65,6 @@ export default function Home() {
   const [customDeliveryPrice, setCustomDeliveryPrice] = useState<number | null>(null);
   const [userManuallyChangedDzielnica, setUserManuallyChangedDzielnica] = useState(false);
   const [addressNotRecognized, setAddressNotRecognized] = useState(false);
-  const [customTotalPrice, setCustomTotalPrice] = useState<number | null>(null);
-  const [userManuallyChangedPrice, setUserManuallyChangedPrice] = useState(false);
   
   const numerDomuInputRef = useRef<HTMLInputElement>(null);
 
@@ -114,8 +106,8 @@ export default function Home() {
   useEffect(() => {
     console.log("Street search data:", searchStreets.data);
     if (searchStreets.data && searchStreets.data.length > 0) {
-      // Wyświetlamy ulice z nazwami dzielnic
-      setStreetSuggestions(searchStreets.data.filter((street: any) => street.ulica && street.dzielnica_nazwa));
+      // Przechowujemy obiekty z ulicą i dzielnicą
+      setStreetSuggestions(searchStreets.data.filter((street: any) => street.ulica));
       setShowSuggestions(true);
       setSelectedSuggestionIndex(-1); // Resetuj wybrany indeks
     } else {
@@ -169,67 +161,32 @@ export default function Home() {
 
   // Kalkuluj cenę na żywo
   useEffect(() => {
-    // Przeliczaj cenę zawsze gdy są produkty LUB gdy jest typ dowozu (żeby uwzględnić cenę dostawy)
-    const shouldCalculate = orderData.pizze.length > 0 || orderData.napoje.length > 0 || orderData.pozycjeExtraIds.length > 0 || orderData.sosy.pomidorowy > 0 || orderData.sosy.czosnkowy > 0 || typZamowienia === "dowoz";
-    
-    console.log("=== useEffect przeliczanie ceny ===");
-    console.log("shouldCalculate:", shouldCalculate);
-    console.log("customDeliveryPrice:", customDeliveryPrice);
-    console.log("typZamowienia:", typZamowienia);
-    console.log("ulica:", ulica, "numerDomu:", numerDomu);
-    console.log("orderData.napoje:", orderData.napoje);
-    console.log("orderData.pizze:", orderData.pizze);
-    orderData.pizze.forEach((p, i) => {
-      console.log(`  Pizza ${i}: ${p.nazwa}, rozmiar: ${p.rozmiar}, cena: ${p.cena}, isKupon: ${p.isKupon}`);
-    });
-    
-    if (shouldCalculate) {
-      // Buduj adres z oddzielnych pól
-      const fullAddress = [ulica, numerDomu, numerMieszkania ? `m. ${numerMieszkania}` : '', dodatkoweInfo].filter(Boolean).join(', ');
-      console.log("Przeliczam cenę, fullAddress:", fullAddress);
-      
-      const payload = {
-        pizze: orderData.pizze.map(p => { 
-          const pizzaPayload = {
-            id: p.id, 
-            rozmiar: p.rozmiar,
-            isKupon: p.isKupon,
-            polNaPol: p.polNaPol
-          };
-          console.log("Pizza payload:", p.nazwa, "isKupon:", p.isKupon, "payload:", pizzaPayload);
-          return pizzaPayload;
-        }),
+    if (orderData.pizze.length > 0 || orderData.napojeIds.length > 0 || orderData.pozycjeExtraIds.length > 0 || orderData.sosy.pomidorowy > 0 || orderData.sosy.czosnkowy > 0) {
+      console.log("Wysyłam do kalkulacji, napojeIds:", orderData.napojeIds);
+      calculatePriceMutation.mutate({
+        pizze: orderData.pizze.map(p => ({ 
+          id: p.id, 
+          rozmiar: p.rozmiar,
+          isKupony: p.isKupony,
+          polNaPol: p.polNaPol
+        })),
         sosy: orderData.sosy,
-        napoje: orderData.napoje,
+        napojeIds: orderData.napojeIds,
         pozycjeExtraIds: orderData.pozycjeExtraIds,
         isKupony: isKupony,
         typZamowienia: typZamowienia,
-        adres: fullAddress,
+        adres: orderData.adres,
         customDeliveryPrice: customDeliveryPrice ?? undefined,
-      };
-      console.log("Payload wysyłany do calculatePrice:", payload);
-      
-      calculatePriceMutation.mutate(payload, {
+      }, {
         onSuccess: (data) => {
-          console.log("calculatePrice onSuccess, zwrócona cena:", data.totalPrice);
-          console.log("userManuallyChangedPrice:", userManuallyChangedPrice);
-          if (!userManuallyChangedPrice) {
-            console.log("Ustawiam totalPrice na:", data.totalPrice);
-            setTotalPrice(data.totalPrice);
-            setCustomTotalPrice(data.totalPrice);
-          } else {
-            console.log("Nie aktualizuję ceny - użytkownik ją zmienił ręcznie");
-          }
+          console.log("Otrzymana cena z backendu:", data);
+          setTotalPrice(data.totalPrice);
         },
       });
     } else {
-      if (!userManuallyChangedPrice) {
-        setTotalPrice(0);
-        setCustomTotalPrice(0);
-      }
+      setTotalPrice(0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderData, isKupony, typZamowienia, ulica, numerDomu, numerMieszkania, dodatkoweInfo, miejscowosc]);
+  }, [orderData, isKupony, typZamowienia]);
 
   const handlePizzaSelect = (pizzaId: number) => {
     const pizza = pizzas?.find((p: any) => p.id === pizzaId);
@@ -246,9 +203,8 @@ export default function Home() {
         nazwa: pizza.nazwa,
         rozmiar,
         cena,
-        isKupon: true, // oznacz tę pizzę jako kuponową
+        isKupony: true,
       };
-      console.log("DODAJĘ PIZZĘ KUPONOWĄ:", newPizza);
       setOrderData(prev => ({
         ...prev,
         pizze: [...prev.pizze, newPizza],
@@ -256,7 +212,6 @@ export default function Home() {
       setSelectedPizzas(new Set());
       setCurrentPizzaSize("srednia");
       setShowAddPizza(false);
-      setIsKupony(false); // reset checkbox after adding
       return;
     }
 
@@ -277,6 +232,7 @@ export default function Home() {
           currentPizzaSize === "srednia" ? pizza.cena_srednia : 
           pizza.cena_duza
         ) + 4, // dopłata 4 PLN
+        isKupony: isKupony,
         polNaPol: {
           id: pizza.id,
           nazwa: pizza.nazwa,
@@ -312,6 +268,7 @@ export default function Home() {
       cena: currentPizzaSize === "mala" ? pizza.cena_mala : 
             currentPizzaSize === "srednia" ? pizza.cena_srednia : 
             pizza.cena_duza,
+      isKupony: isKupony,
     };
 
     setOrderData(prev => ({
@@ -331,9 +288,8 @@ export default function Home() {
     }));
   };
 
-  const handleStreetSelect = (suggestion: { ulica: string; dzielnica_nazwa: string }) => {
-    setUlica(suggestion.ulica);
-    setMiejscowosc(suggestion.dzielnica_nazwa);
+  const handleStreetSelect = (ulicaName: string) => {
+    setUlica(ulicaName);
     setShowSuggestions(false);
     setSelectedSuggestionIndex(-1);
     // Automatycznie przenosimy focus na pole numer domu
@@ -348,7 +304,7 @@ export default function Home() {
       adres: "",
       pizze: [],
       sosy: { pomidorowy: 0, czosnkowy: 0 },
-      napoje: [],
+      napojeIds: [],
       pozycjeExtraIds: [],
       platnosc: "gotowka",
     });
@@ -356,11 +312,7 @@ export default function Home() {
     setNumerDomu("");
     setNumerMieszkania("");
     setDodatkoweInfo("");
-    setMiejscowosc("");
     setTotalPrice(0);
-    setCustomDeliveryPrice(null);
-    setUserManuallyChangedDzielnica(false);
-    setAddressNotRecognized(false);
     setSelectedPizzas(new Set());
     setShowSuggestions(false);
     setStreetSuggestions([]);
@@ -482,42 +434,31 @@ export default function Home() {
 
     try {
       console.log("Składanie zamówienia:", orderData);
-      console.log("Flaga ręcznej zmiany ceny:", userManuallyChangedPrice);
-      console.log("Wartość customTotalPrice:", customTotalPrice);
-      console.log("Wartość totalPrice:", totalPrice);
       
-      const orderPayload = {
+      const result = await placeOrderMutation.mutateAsync({
         telefon: orderData.telefon,
         adres: orderData.adres,
         pizze: orderData.pizze.map(p => ({ 
           id: p.id, 
           rozmiar: p.rozmiar,
-          isKupon: p.isKupon,
+          isKupony: p.isKupony,
           polNaPol: p.polNaPol
         })),
         sosy: orderData.sosy,
-        napoje: orderData.napoje,
+        napojeIds: orderData.napojeIds,
         pozycjeExtraIds: orderData.pozycjeExtraIds,
         platnosc: orderData.platnosc,
         isKupony: isKupony,
         typZamowienia: typZamowienia,
         skladniki: generateSkladnikiString(),
         customDeliveryPrice: customDeliveryPrice ?? undefined,
-        customTotalPrice: userManuallyChangedPrice ? (customTotalPrice ?? undefined) : undefined,
-      };
-      
-      console.log("Wysyłam dane zamówienia:", orderPayload);
-      
-      const result = await placeOrderMutation.mutateAsync(orderPayload);
+      });
 
       console.log("Wynik zamówienia:", result);
       
       if (result && result.success) {
         alert(`✅ Zamówienie złożone pomyślnie! Cena: ${result.cenaCalkwita} PLN`);
         resetForm();
-        // Resetuj również flagi ceny po pomyślnym złożeniu zamówienia
-        setCustomTotalPrice(null);
-        setUserManuallyChangedPrice(false);
       } else {
         alert("❌ Błąd podczas składania zamówienia");
       }
@@ -601,9 +542,8 @@ export default function Home() {
                   type="tel"
                   value={orderData.telefon.replace(/(\d{3})(?=\d)/g, '$1 ')}
                   onChange={(e) => {
-                    // Usuń wszystkie spacje i zachowaj tylko cyfry
-                    const cleanValue = e.target.value.replace(/\s/g, '');
-                    setOrderData(prev => ({ ...prev, telefon: cleanValue }));
+                    const cleanedValue = e.target.value.replace(/\s/g, '');
+                    setOrderData(prev => ({ ...prev, telefon: cleanedValue }));
                   }}
                   className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                   placeholder="123 456 789"
@@ -699,7 +639,7 @@ export default function Home() {
                         } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
                           e.preventDefault();
                           const selected = streetSuggestions[selectedSuggestionIndex];
-                          if (selected) handleStreetSelect(selected);
+                          if (selected) handleStreetSelect(selected.ulica);
                         } else if (e.key === 'Escape') {
                           setShowSuggestions(false);
                           setSelectedSuggestionIndex(-1);
@@ -711,19 +651,19 @@ export default function Home() {
                     />
                     {showSuggestions && streetSuggestions.length > 0 && (
                       <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-96 overflow-y-auto">
-                        {streetSuggestions.map((suggestion, index) => (
+                        {streetSuggestions.map((street, index) => (
                           <button
                             key={index}
                             type="button"
-                            onClick={() => handleStreetSelect(suggestion)}
+                            onClick={() => handleStreetSelect(street.ulica)}
                             className={`w-full text-left px-3 py-2 transition-colors flex justify-between items-center ${
                               index === selectedSuggestionIndex
                                 ? 'bg-blue-50 border-2 border-blue-400 border-opacity-50'
                                 : 'hover:bg-gray-100 border-2 border-transparent'
                             }`}
                           >
-                            <span className="font-medium">{suggestion.ulica}</span>
-                            <span className="text-sm text-gray-600 ml-2">({suggestion.dzielnica_nazwa})</span>
+                            <span className="font-medium">{street.ulica}</span>
+                            <span className="text-sm text-gray-500 ml-2">({street.dzielnica_nazwa})</span>
                           </button>
                         ))}
                       </div>
@@ -823,10 +763,7 @@ export default function Home() {
               {orderData.pizze.map((pizza, index) => (
                 <div key={index} className="bg-gray-50 p-3 rounded mb-2">
                   <div className="flex justify-between items-center">
-                    <span>
-                      {pizza.nazwa} - {pizza.rozmiar} ({pizza.cena} PLN)
-                      {pizza.isKupon && <span className="ml-2 text-green-600 font-semibold">(KUPON)</span>}
-                    </span>
+                    <span>{pizza.nazwa} - {pizza.rozmiar} ({pizza.cena} PLN)</span>
                     <div className="flex space-x-2">
                       <button
                         type="button"
@@ -928,30 +865,42 @@ export default function Home() {
                 {/* Wybór rozmiaru */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Rozmiar</label>
-                  <div className="flex space-x-4">
+                  <div className="flex gap-3">
                     {isKupony ? (
                       <>
-                        <label className="flex items-center cursor-pointer">
+                        <label 
+                          className={`flex-1 cursor-pointer transition-all ${
+                            currentPizzaSize === "srednia" 
+                              ? 'bg-blue-500 text-white border-blue-500' 
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                          } border rounded-lg px-4 py-3 text-center font-medium`}
+                        >
                           <input
                             type="radio"
                             name="size"
                             value="srednia"
                             checked={currentPizzaSize === "srednia"}
                             onChange={() => setCurrentPizzaSize("srednia")}
-                            className="mr-2 w-5 h-5 cursor-pointer"
+                            className="hidden"
                           />
-                          <span className="text-lg">Średnia (0 zł)</span>
+                          Średnia (0 zł)
                         </label>
-                        <label className="flex items-center cursor-pointer">
+                        <label 
+                          className={`flex-1 cursor-pointer transition-all ${
+                            currentPizzaSize === "duza" 
+                              ? 'bg-blue-500 text-white border-blue-500' 
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                          } border rounded-lg px-4 py-3 text-center font-medium`}
+                        >
                           <input
                             type="radio"
                             name="size"
                             value="duza"
                             checked={currentPizzaSize === "duza"}
                             onChange={() => setCurrentPizzaSize("duza")}
-                            className="mr-2 w-5 h-5 cursor-pointer"
+                            className="hidden"
                           />
-                          <span className="text-lg">Duża (+10 zł)</span>
+                          Duża (+10 zł)
                         </label>
                       </>
                     ) : (
@@ -960,16 +909,23 @@ export default function Home() {
                         { key: "srednia", label: "Średnia" },
                         { key: "duza", label: "Duża" }
                       ].map(size => (
-                        <label key={size.key} className="flex items-center cursor-pointer">
+                        <label 
+                          key={size.key} 
+                          className={`flex-1 cursor-pointer transition-all ${
+                            currentPizzaSize === size.key 
+                              ? 'bg-blue-500 text-white border-blue-500' 
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                          } border rounded-lg px-4 py-3 text-center font-medium`}
+                        >
                           <input
                             type="radio"
                             name="size"
                             value={size.key}
                             checked={currentPizzaSize === size.key}
                             onChange={(e) => setCurrentPizzaSize(e.target.value as "mala" | "srednia" | "duza")}
-                            className="mr-2 w-5 h-5 cursor-pointer"
+                            className="hidden"
                           />
-                          <span className="text-lg">{size.label}</span>
+                          {size.label}
                         </label>
                       ))
                     )}
@@ -1053,25 +1009,34 @@ export default function Home() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Sos pomidorowy
                   </label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => setOrderData(prev => ({
                         ...prev,
                         sosy: { ...prev.sosy, pomidorowy: Math.max(0, prev.sosy.pomidorowy - 1) }
                       }))}
-                      className="w-12 h-12 bg-red-500 text-white rounded-md text-2xl font-bold hover:bg-red-600 transition-colors"
+                      className="w-12 h-12 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-xl font-bold text-gray-700 transition-colors"
                     >
                       −
                     </button>
-                    <span className="text-2xl font-bold w-12 text-center">{orderData.sosy.pomidorowy}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={orderData.sosy.pomidorowy}
+                      onChange={(e) => setOrderData(prev => ({
+                        ...prev,
+                        sosy: { ...prev.sosy, pomidorowy: parseInt(e.target.value) || 0 }
+                      }))}
+                      className="flex-1 p-3 border border-gray-300 rounded-md text-center font-semibold"
+                    />
                     <button
                       type="button"
                       onClick={() => setOrderData(prev => ({
                         ...prev,
                         sosy: { ...prev.sosy, pomidorowy: prev.sosy.pomidorowy + 1 }
                       }))}
-                      className="w-12 h-12 bg-green-500 text-white rounded-md text-2xl font-bold hover:bg-green-600 transition-colors"
+                      className="w-12 h-12 flex items-center justify-center bg-blue-500 hover:bg-blue-600 border border-blue-500 rounded-lg text-xl font-bold text-white transition-colors"
                     >
                       +
                     </button>
@@ -1081,25 +1046,34 @@ export default function Home() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Sos czosnkowy
                   </label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => setOrderData(prev => ({
                         ...prev,
                         sosy: { ...prev.sosy, czosnkowy: Math.max(0, prev.sosy.czosnkowy - 1) }
                       }))}
-                      className="w-12 h-12 bg-red-500 text-white rounded-md text-2xl font-bold hover:bg-red-600 transition-colors"
+                      className="w-12 h-12 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-xl font-bold text-gray-700 transition-colors"
                     >
                       −
                     </button>
-                    <span className="text-2xl font-bold w-12 text-center">{orderData.sosy.czosnkowy}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={orderData.sosy.czosnkowy}
+                      onChange={(e) => setOrderData(prev => ({
+                        ...prev,
+                        sosy: { ...prev.sosy, czosnkowy: parseInt(e.target.value) || 0 }
+                      }))}
+                      className="flex-1 p-3 border border-gray-300 rounded-md text-center font-semibold"
+                    />
                     <button
                       type="button"
                       onClick={() => setOrderData(prev => ({
                         ...prev,
                         sosy: { ...prev.sosy, czosnkowy: prev.sosy.czosnkowy + 1 }
                       }))}
-                      className="w-12 h-12 bg-green-500 text-white rounded-md text-2xl font-bold hover:bg-green-600 transition-colors"
+                      className="w-12 h-12 flex items-center justify-center bg-blue-500 hover:bg-blue-600 border border-blue-500 rounded-lg text-xl font-bold text-white transition-colors"
                     >
                       +
                     </button>
@@ -1139,60 +1113,59 @@ export default function Home() {
 
             {/* Napoje */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Napoje (opcjonalnie)</h3>
-              
-              {/* Lista wybranych napojów */}
-              {orderData.napoje.length > 0 && (
-                <div className="mb-4 space-y-2">
-                  {orderData.napoje.map((napoj, index) => (
-                    <div key={index} className="flex items-center justify-between bg-blue-50 p-3 rounded-md">
-                      <span className="font-medium">{napoj.nazwa} - {napoj.cena} PLN</span>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Napoje (opcjonalnie)
+              </label>
+              <div className="space-y-3">
+                {orderData.napojeIds.map((napojId, index) => {
+                  const wybranyNapoj = napoje?.find((n: any) => n.id === napojId);
+                  return (
+                    <div key={index} className="flex gap-2 items-center">
+                      <select
+                        value={napojId}
+                        onChange={(e) => {
+                          const newNapojeIds = [...orderData.napojeIds];
+                          newNapojeIds[index] = parseInt(e.target.value);
+                          setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
+                        }}
+                        className="flex-1 p-3 border border-gray-300 rounded-md"
+                      >
+                        {napoje?.map((napoj: any) => (
+                          <option key={napoj.id} value={napoj.id}>
+                            {napoj.nazwa} - {napoj.cena} PLN
+                          </option>
+                        ))}
+                      </select>
                       <button
                         type="button"
-                        onClick={() => setOrderData(prev => ({
-                          ...prev,
-                          napoje: prev.napoje.filter((_, i) => i !== index)
-                        }))}
-                        className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                        onClick={() => {
+                          const newNapojeIds = orderData.napojeIds.filter((_, i) => i !== index);
+                          setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
+                        }}
+                        className="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-md font-medium transition-colors"
                       >
                         Usuń
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Wybór napoju - zawsze pokazuj select */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {orderData.napoje.length === 0 ? 'Wybierz napój' : 'Dodaj kolejny napój'}
-                </label>
-                <select
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      const selectedNapoj = napoje?.find((n: any) => n.id === parseInt(e.target.value));
-                      if (selectedNapoj) {
-                        setOrderData(prev => ({
-                          ...prev,
-                          napoje: [...prev.napoje, { 
-                            id: selectedNapoj.id, 
-                            nazwa: selectedNapoj.nazwa, 
-                            cena: selectedNapoj.cena 
-                          }]
-                        }));
-                      }
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (napoje && napoje.length > 0) {
+                      // Znajdź napój "0,85" lub pierwszy dostępny
+                      const napoj085 = napoje.find((n: any) => n.nazwa.includes("0,85"));
+                      const defaultNapojId = napoj085 ? napoj085.id : napoje[0].id;
+                      setOrderData(prev => ({ 
+                        ...prev, 
+                        napojeIds: [...prev.napojeIds, defaultNapojId] 
+                      }));
                     }
                   }}
-                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-3 bg-green-500 hover:bg-green-600 text-white rounded-md font-medium transition-colors"
                 >
-                  <option value="">-- Wybierz napój --</option>
-                  {napoje?.map((napoj: any) => (
-                    <option key={napoj.id} value={napoj.id}>
-                      {napoj.nazwa} - {napoj.cena} PLN
-                    </option>
-                  ))}
-                </select>
+                  + Dodaj napój
+                </button>
               </div>
             </div>
 
@@ -1227,31 +1200,8 @@ export default function Home() {
 
             {/* Podsumowanie ceny */}
             <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="flex items-center justify-center gap-3">
-                <label className="text-xl font-bold">Cena całkowita:</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={userManuallyChangedPrice ? (customTotalPrice?.toString() ?? totalPrice.toFixed(2)) : totalPrice.toFixed(2)}
-                  onChange={(e) => {
-                    const inputValue = e.target.value;
-                    // Pozwól na puste pole lub cyfry z kropką/przecinkiem
-                    if (inputValue === '' || /^\d*[.,]?\d*$/.test(inputValue)) {
-                      const value = inputValue === '' ? 0 : parseFloat(inputValue.replace(',', '.'));
-                      setCustomTotalPrice(value);
-                      setTotalPrice(value);
-                      setUserManuallyChangedPrice(true);
-                    }
-                  }}
-                  onBlur={(e) => {
-                    // Po opuszczeniu pola sformatuj wartość
-                    const value = parseFloat(e.target.value.replace(',', '.')) || 0;
-                    setCustomTotalPrice(value);
-                    setTotalPrice(value);
-                  }}
-                  className="w-32 p-2 text-xl font-bold text-center border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-xl font-bold">PLN</span>
+              <div className="text-xl font-bold text-center">
+                Cena całkowita: {totalPrice.toFixed(2)} PLN
               </div>
             </div>
 
