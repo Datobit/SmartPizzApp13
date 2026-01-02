@@ -37,6 +37,22 @@ export const pizzaRouter = createTRPCRouter({
     return extras;
   }),
 
+  // Pobiera aktywne sesje kierowców
+  getAktywneSesje: publicProcedure.query(async () => {
+    const sesje = await db.sesja.findMany({
+      where: {
+        status: 'otwarta'
+      },
+      include: {
+        kierowca: true
+      },
+      orderBy: {
+        data_otwarcia: 'desc'
+      }
+    });
+    return sesje;
+  }),
+
   // Wyszukuje ulice na podstawie fragmentu nazwy
   searchUlice: publicProcedure
     .input(z.object({ query: z.string().min(1) }))
@@ -118,11 +134,16 @@ export const pizzaRouter = createTRPCRouter({
           return {
             dzielnica_nazwa: ulicaRecord.dzielnica_nazwa,
             cena_dzielnica: ulicaRecord.dzielnica.cena_dzielnica,
+            numerZnaleziony: true,
           };
+        } else {
+          // Numer nie został znaleziony w bazie - zwróć null aby frontend pokazał ostrzeżenie
+          console.log(`Nie znaleziono numeru ${input.numer} dla ulicy ${input.ulica}`);
+          return null;
         }
       }
       
-      // Jeśli nie znaleziono dokładnego numeru, zwracamy pierwszy wynik dla (klastra) + ulicy
+      // Jeśli nie podano numeru, zwracamy pierwszy wynik dla (klastra) + ulicy
       const ulicaRecord = await db.ulica.findFirst({
         where: whereClause,
         include: {
@@ -132,10 +153,11 @@ export const pizzaRouter = createTRPCRouter({
 
       if (ulicaRecord && ulicaRecord.dzielnica) {
         const klasterInfo = input.miejscowosc ? ` w klastrze ${input.miejscowosc}` : '';
-        console.log(`Znaleziono ulicę${klasterInfo}: ${input.ulica} (bez dokładnego numeru)`);
+        console.log(`Znaleziono ulicę${klasterInfo}: ${input.ulica} (bez sprawdzania numeru)`);
         return {
           dzielnica_nazwa: ulicaRecord.dzielnica_nazwa,
           cena_dzielnica: ulicaRecord.dzielnica.cena_dzielnica,
+          numerZnaleziony: false,
         };
       }
       
@@ -166,15 +188,24 @@ export const pizzaRouter = createTRPCRouter({
         typZamowienia: z.enum(["na_miejscu", "na_wynos", "dowoz"]).optional(),
         adres: z.string().optional(),
         customDeliveryPrice: z.number().optional(),
+        modyfikacjeSkladnikow: z.record(z.string(), z.record(z.string(), z.number())).optional(),
       })
     )
     .mutation(async ({ input }) => {
       let totalPrice = 0;
 
       // Cena pizz
-      for (const pizza of input.pizze) {
+      for (let i = 0; i < input.pizze.length; i++) {
+        const pizza = input.pizze[i];
         const pizzaData = await db.pizza.findUnique({
           where: { id: pizza.id },
+          include: {
+            skladniki: {
+              include: {
+                skladnik: true
+              }
+            }
+          }
         });
         
         if (pizzaData) {
@@ -196,6 +227,42 @@ export const pizzaRouter = createTRPCRouter({
               case "duza":
                 pizzaPrice = pizzaData.cena_duza;
                 break;
+            }
+          }
+          
+          // Oblicz modyfikacje składników dla tej pizzy
+          if (input.modyfikacjeSkladnikow) {
+            const pizzaKey = `${i}`;
+            const modyfikacje = input.modyfikacjeSkladnikow[pizzaKey];
+            
+            if (modyfikacje) {
+              // Pobierz bazowe składniki tej pizzy
+              const bazoweSkladniki: Record<string, number> = {};
+              pizzaData.skladniki.forEach(ps => {
+                bazoweSkladniki[ps.skladnik.nazwa] = 1; // Domyślnie 1x składnik
+              });
+              
+              // Oblicz różnice
+              for (const [skladnikNazwa, nowaIlosc] of Object.entries(modyfikacje)) {
+                const bazowaIlosc = bazoweSkladniki[skladnikNazwa] || 0;
+                const roznica = nowaIlosc - bazowaIlosc;
+                
+                // Tylko dodawanie składników zwiększa cenę (usuwanie nie zmniejsza)
+                if (roznica > 0) {
+                  // Znajdź składnik w bazie
+                  const skladnik = await db.skladnik.findFirst({
+                    where: { nazwa: skladnikNazwa }
+                  });
+                  
+                  if (skladnik) {
+                    const cenaZaSkladnik = pizza.rozmiar === "srednia" 
+                      ? skladnik.cena_srednia 
+                      : skladnik.cena_duza;
+                    
+                    pizzaPrice += roznica * cenaZaSkladnik;
+                  }
+                }
+              }
             }
           }
           
@@ -326,6 +393,8 @@ export const pizzaRouter = createTRPCRouter({
         typZamowienia: z.enum(["na_miejscu", "na_wynos", "dowoz"]).optional(),
         skladniki: z.string().optional(),
         customDeliveryPrice: z.number().optional(),
+        sesjaId: z.number().optional(),
+        modyfikacjeSkladnikow: z.record(z.string(), z.record(z.string(), z.number())).optional(),
       })
       .refine(
         (data) => {
@@ -369,6 +438,52 @@ export const pizzaRouter = createTRPCRouter({
                 case "duza":
                   pizzaPrice = pizzaData.cena_duza;
                   break;
+              }
+            }
+            
+            // Oblicz modyfikacje składników dla tej pizzy
+            if (input.modyfikacjeSkladnikow) {
+              const pizzaIndex = input.pizze.indexOf(pizza);
+              const pizzaKey = `${pizzaIndex}`;
+              const modyfikacje = input.modyfikacjeSkladnikow[pizzaKey];
+              
+              if (modyfikacje) {
+                // Pobierz bazowe składniki tej pizzy
+                const pizzaDataWithIngredients = await tx.pizza.findUnique({
+                  where: { id: pizza.id },
+                  include: {
+                    skladniki: {
+                      include: {
+                        skladnik: true
+                      }
+                    }
+                  }
+                });
+                
+                const bazoweSkladniki: Record<string, number> = {};
+                pizzaDataWithIngredients?.skladniki.forEach((ps: any) => {
+                  bazoweSkladniki[ps.skladnik.nazwa] = 1;
+                });
+                
+                // Oblicz różnice
+                for (const [skladnikNazwa, nowaIlosc] of Object.entries(modyfikacje)) {
+                  const bazowaIlosc = bazoweSkladniki[skladnikNazwa] || 0;
+                  const roznica = nowaIlosc - bazowaIlosc;
+                  
+                  if (roznica > 0) {
+                    const skladnik = await tx.skladnik.findFirst({
+                      where: { nazwa: skladnikNazwa }
+                    });
+                    
+                    if (skladnik) {
+                      const cenaZaSkladnik = pizza.rozmiar === "srednia" 
+                        ? skladnik.cena_srednia 
+                        : skladnik.cena_duza;
+                      
+                      pizzaPrice += roznica * cenaZaSkladnik;
+                    }
+                  }
+                }
               }
             }
             
@@ -492,7 +607,8 @@ export const pizzaRouter = createTRPCRouter({
           created_at,
           is_kupony,
           typ_zamowienia,
-          skladniki
+          skladniki,
+          sesja_id
         ) VALUES (
           ${input.telefon},
           ${input.adres},
@@ -505,11 +621,26 @@ export const pizzaRouter = createTRPCRouter({
           NOW(),
           ${input.isKupony ? 1 : 0},
           ${input.typZamowienia},
-          ${input.skladniki || null}
+          ${input.skladniki || null},
+          ${input.sesjaId || null}
         )
       `;
       
       console.log("Zamówienie zapisane pomyślnie:", insertResult);
+      
+      // Jeśli płatność gotówką, przypisano do sesji i typ to dowóz, dodaj wpływ
+      if (input.platnosc === 'gotowka' && input.sesjaId && input.typZamowienia === 'dowoz') {
+        console.log(`Dodaję wpływ ${priceResult} PLN do sesji ${input.sesjaId}`);
+        try {
+          await db.$executeRaw`
+            INSERT INTO transakcje (sesja_id, typ, kwota, opis)
+            VALUES (${input.sesjaId}, 'wplyw', ${priceResult}, ${`Zamówienie - ${input.adres}`})
+          `;
+          console.log("Wpływ dodany pomyślnie");
+        } catch (error) {
+          console.error("Błąd dodawania wpływu:", error);
+        }
+      }
 
       return {
         success: true,

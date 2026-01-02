@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Pizza {
-  id           Int    @id @default(autoincrement())
+  id           Int             @id @default(autoincrement())
   nazwa        String
   cena_mala    Float
   cena_srednia Float
@@ -19,9 +19,11 @@ model Pizza {
 }
 
 model Skladnik {
-  id    Int             @id @default(autoincrement())
-  nazwa String
-  pizze PizzaSkladnik[]
+  id            Int             @id @default(autoincrement())
+  nazwa         String
+  cena_srednia  Float           @default(0)
+  cena_duza     Float           @default(0)
+  pizze         PizzaSkladnik[]
 
   @@map("skladniki")
 }
@@ -33,6 +35,7 @@ model PizzaSkladnik {
   skladnik    Skladnik @relation(fields: [id_skladnik], references: [id])
 
   @@id([id_pizza, id_skladnik])
+  @@index([id_skladnik], map: "relacja_skladniki_id_skladnik_fkey")
   @@map("relacja_skladniki")
 }
 
@@ -45,9 +48,9 @@ model Napoj {
 }
 
 model Dzielnica {
-  id              Int     @id @default(autoincrement())
-  cena_dzielnica  Float
-  ulice           Ulica[]
+  id             Int     @id @default(autoincrement())
+  cena_dzielnica Float
+  ulice          Ulica[]
 
   @@map("dzielnice")
 }
@@ -57,12 +60,13 @@ model Ulica {
   miejscowosc     String?    @db.Text
   ulica           String?    @db.Text
   numer           String?    @db.Text
-  x               String?    @db.Text
-  y               String?    @db.Text
+  x               Int?
+  y               Int?
   id_dzielnica    Int?
   dzielnica_nazwa String?    @db.Text
   dzielnica       Dzielnica? @relation(fields: [id_dzielnica], references: [id])
 
+  @@index([id_dzielnica], map: "id_dzielnica")
   @@map("ulice")
 }
 
@@ -75,19 +79,68 @@ model PozycjaExtra {
 }
 
 model Zamowienie {
-  id              Int      @id @default(autoincrement())
-  telefon         String?  @db.Text
-  adres           String?  @db.Text
-  pizze           String?  @db.Text
-  sosy            String?  @db.Text
-  napoj           String?  @db.Text
-  pozycje_extra   String?  @db.Text
-  platnosc        String?  @db.Text
-  cena_calkowita  Float?
-  created_at      DateTime? @db.DateTime(0)
-  is_kupony       Int?
-  typ_zamowienia  String?  @db.Text
-  skladniki       String?  @db.Text
+  id             Int       @id @default(autoincrement())
+  telefon        String?   @db.Text
+  adres          String?   @db.Text
+  pizze          String?   @db.Text
+  sosy           String?   @db.Text
+  napoj          String?   @db.Text
+  pozycje_extra  String?   @db.Text
+  platnosc       String?   @db.Text
+  cena_calkowita Float?
+  created_at     DateTime? @db.DateTime(0)
+  is_kupony      Int?
+  typ_zamowienia String?   @db.Text
+  skladniki      String?   @db.Text
+  sesja_id       Int?
+  sesja          Sesja?    @relation(fields: [sesja_id], references: [id])
 
+  @@index([sesja_id], map: "sesja_id")
   @@map("zamowienia")
+}
+
+model Kierowca {
+  id    Int     @id @default(autoincrement())
+  nazwa String  @db.VarChar(100)
+  sesje Sesja[]
+
+  @@map("kierowcy")
+}
+
+model Sesja {
+  id              Int           @id @default(autoincrement())
+  kierowca_id     Int
+  kierowca        Kierowca      @relation(fields: [kierowca_id], references: [id])
+  data_otwarcia   DateTime      @default(now()) @db.DateTime(0)
+  data_zamkniecia DateTime?     @db.DateTime(0)
+  saldo_koncowe   Decimal?      @db.Decimal(10, 2)
+  status          sesje_status? @default(otwarta)
+  transakcje      Transakcja[]
+  zamowienia      Zamowienie[]
+
+  @@index([kierowca_id], map: "kierowca_id")
+  @@map("sesje")
+}
+
+model Transakcja {
+  id              Int            @id @default(autoincrement())
+  sesja_id        Int
+  sesja           Sesja          @relation(fields: [sesja_id], references: [id])
+  typ             transakcje_typ
+  kwota           Decimal        @db.Decimal(10, 2)
+  opis            String?        @db.VarChar(255)
+  data_utworzenia DateTime       @default(now()) @db.DateTime(0)
+
+  @@index([sesja_id], map: "sesja_id")
+  @@map("transakcje")
+}
+
+enum transakcje_typ {
+  wplyw
+  wydatek
+}
+
+enum sesje_status {
+  otwarta
+  zamknieta
 }

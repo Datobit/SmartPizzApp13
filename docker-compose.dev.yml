@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # Baza danych MariaDB dla development
+  mariadb-dev:
+    image: mariadb:11.2
+    container_name: smartpizza-mariadb-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: SmartPizzApp13
+      MYSQL_USER: smartpizza
+      MYSQL_PASSWORD: pizzapass123
+    ports:
+      - "3307:3306"  # Inny port żeby nie kolidować z lokalną bazą
+    volumes:
+      - mariadb_dev_data:/var/lib/mysql
+    networks:
+      - smartpizza-dev-network
+
+networks:
+  smartpizza-dev-network:
+    driver: bridge
+
+volumes:
+  mariadb_dev_data:

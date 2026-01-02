@@ -65,6 +65,7 @@ export default function Home() {
   const [customDeliveryPrice, setCustomDeliveryPrice] = useState<number | null>(null);
   const [userManuallyChangedDzielnica, setUserManuallyChangedDzielnica] = useState(false);
   const [addressNotRecognized, setAddressNotRecognized] = useState(false);
+  const [wybranaSesjaId, setWybranaSesjaId] = useState<number | null>(null);
   
   const numerDomuInputRef = useRef<HTMLInputElement>(null);
 
@@ -73,6 +74,7 @@ export default function Home() {
   const { data: napoje, isLoading: napojeLoading } = api.pizza.getAllNapoje.useQuery();
   const { data: pozycjeExtra, isLoading: extraLoading } = api.pizza.getAllPozycjeExtra.useQuery();
   const { data: skladniki, isLoading: skladnikiLoading, error: skladnikiError } = api.pizza.getAllSkladniki.useQuery();
+  const { data: aktywneSesje, isLoading: sesjeLoading } = api.pizza.getAktywneSesje.useQuery();
 
   const searchStreets = api.pizza.searchUlice.useQuery(
     { query: ulica },
@@ -97,10 +99,20 @@ export default function Home() {
     console.log("Pizzas error:", pizzasError);
     console.log("Pozycje extra data:", pozycjeExtra);
     console.log("Pozycje extra loading:", extraLoading);
-  }, [pizzas, pizzasLoading, pizzasError, pozycjeExtra, extraLoading, skladniki, skladnikiError]);
+    console.log("Aktywne sesje:", aktywneSesje);
+  }, [pizzas, pizzasLoading, pizzasError, pozycjeExtra, extraLoading, skladniki, skladnikiError, aktywneSesje]);
 
   const calculatePriceMutation = api.pizza.calculatePrice.useMutation();
   const placeOrderMutation = api.pizza.placeOrder.useMutation();
+
+  // Automatycznie ustaw sesję jeśli jest tylko jedna aktywna
+  useEffect(() => {
+    if (aktywneSesje && aktywneSesje.length === 1) {
+      setWybranaSesjaId(aktywneSesje[0].id);
+    } else if (aktywneSesje && aktywneSesje.length === 0) {
+      setWybranaSesjaId(null);
+    }
+  }, [aktywneSesje]);
 
   // Aktualizuj sugestie ulic
   useEffect(() => {
@@ -121,28 +133,64 @@ export default function Home() {
 
   // Aktualizuj informacje o dzielnicy
   useEffect(() => {
+    // Query jest włączony tylko dla zamówień z dowozem i gdy są wpisane ulica i numer
+    const isQueryEnabled = ulica.length > 0 && numerDomu.length > 0 && typZamowienia === "dowoz";
+    
+    console.log("dzielnicaInfo useEffect:", {
+      isQueryEnabled,
+      isFetching: dzielnicaInfo.isFetching,
+      hasData: !!dzielnicaInfo.data,
+      data: dzielnicaInfo.data,
+      ulica,
+      numerDomu,
+      typZamowienia
+    });
+    
+    if (!isQueryEnabled) {
+      // Jeśli query nie jest włączony, nie sprawdzaj adresu
+      return;
+    }
+
+    // Sprawdzaj tylko gdy query nie jest w trakcie ładowania
+    if (dzielnicaInfo.isFetching) {
+      return;
+    }
+
     if (dzielnicaInfo.data && dzielnicaInfo.data.dzielnica_nazwa) {
+      console.log("Adres znaleziony w bazie:", dzielnicaInfo.data);
       setDzielnicaNazwa(dzielnicaInfo.data.dzielnica_nazwa);
+      
+      // Sprawdź czy numer domu został znaleziony w bazie
+      // @ts-ignore - numerZnaleziony może nie być w typach
+      const numerZnaleziony = dzielnicaInfo.data.numerZnaleziony;
+      
+      // Jeśli użytkownik podał numer, ale nie został znaleziony - pokaż ostrzeżenie
+      if (numerDomu && numerZnaleziony === false) {
+        console.log("Numer domu nie został znaleziony w bazie - pokazuję ostrzeżenie");
+        setAddressNotRecognized(true);
+      } else {
+        // Numer znaleziony lub nie był wymagany
+        setAddressNotRecognized(false);
+      }
+      
       // Automatycznie ustaw dzielnicę na podstawie danych z bazy (tylko jeśli użytkownik nie zmienił ręcznie)
       if (!userManuallyChangedDzielnica) {
         setMiejscowosc(dzielnicaInfo.data.dzielnica_nazwa);
         setCustomDeliveryPrice(dzielnicaInfo.data.cena_dzielnica);
-        setAddressNotRecognized(false);
       } else {
         // Użytkownik ręcznie zmienił dzielnicę - pokaż ostrzeżenie
         setAddressNotRecognized(true);
       }
     } else {
       // Adres nie został znaleziony w bazie
-      if (ulica && numerDomu) {
-        setAddressNotRecognized(true);
-      }
+      console.log("Adres NIE znaleziony - ustawiam addressNotRecognized na TRUE");
+      setAddressNotRecognized(true);
       setDzielnicaNazwa("");
       if (!userManuallyChangedDzielnica) {
         setCustomDeliveryPrice(null);
       }
     }
-  }, [dzielnicaInfo.data, userManuallyChangedDzielnica, ulica, numerDomu]);
+  }, [dzielnicaInfo.data, dzielnicaInfo.isFetching, userManuallyChangedDzielnica, ulica, numerDomu, typZamowienia]);
 
   // Aktualizuj pełny adres przy zmianie pól
   useEffect(() => {
@@ -163,6 +211,41 @@ export default function Home() {
   useEffect(() => {
     if (orderData.pizze.length > 0 || orderData.napojeIds.length > 0 || orderData.pozycjeExtraIds.length > 0 || orderData.sosy.pomidorowy > 0 || orderData.sosy.czosnkowy > 0) {
       console.log("Wysyłam do kalkulacji, napojeIds:", orderData.napojeIds);
+      
+      // Przygotuj modyfikacje składników w formacie: { "0": { "pieczarki": 2, "szynka": 0 }, "1": {...} }
+      const modyfikacjeSkladnikow: Record<string, Record<string, number>> = {};
+      orderData.pizze.forEach((pizza, index) => {
+        if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
+          // Musimy zamienić ID składników na nazwy i obliczyć CAŁKOWITĄ ilość (baza + modyfikacja)
+          const modsByName: Record<string, number> = {};
+          
+          // Pobierz definicję pizzy z bazy aby znać bazowe składniki
+          const pizzaDef = pizzas?.find(p => p.id === pizza.id);
+          
+          Object.entries(pizza.modifications).forEach(([skladnikIdStr, change]) => {
+            const skladnikId = parseInt(skladnikIdStr);
+            const skladnik = skladniki?.find(s => s.id === skladnikId);
+            if (skladnik) {
+              // Sprawdź czy składnik jest bazowy w tej pizzy
+              const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+              const baseCount = isBase ? 1 : 0;
+              
+              // CAŁKOWITA ilość = bazowa + zmiana
+              const totalCount = baseCount + change;
+              
+              // Wysyłaj tylko składniki które faktycznie są (nie usunięte całkowicie)
+              if (totalCount > 0) {
+                modsByName[skladnik.nazwa] = totalCount;
+              }
+            }
+          });
+          
+          if (Object.keys(modsByName).length > 0) {
+            modyfikacjeSkladnikow[index.toString()] = modsByName;
+          }
+        }
+      });
+      
       calculatePriceMutation.mutate({
         pizze: orderData.pizze.map(p => ({ 
           id: p.id, 
@@ -177,6 +260,7 @@ export default function Home() {
         typZamowienia: typZamowienia,
         adres: orderData.adres,
         customDeliveryPrice: customDeliveryPrice ?? undefined,
+        modyfikacjeSkladnikow: Object.keys(modyfikacjeSkladnikow).length > 0 ? modyfikacjeSkladnikow : undefined,
       }, {
         onSuccess: (data) => {
           console.log("Otrzymana cena z backendu:", data);
@@ -191,6 +275,75 @@ export default function Home() {
   const handlePizzaSelect = (pizzaId: number) => {
     const pizza = pizzas?.find((p: any) => p.id === pizzaId);
     if (!pizza) return;
+
+    // Jeśli wybieramy drugą pizzę dla opcji "pół na pół"
+    if (showPolNaPolSelector && firstPizzaId) {
+      const firstPizza = pizzas?.find((p: any) => p.id === firstPizzaId);
+      if (!firstPizza) return;
+
+      // W trybie KUPONY sprawdź czy obie pizze są w pierwszych 13
+      if (isKupony) {
+        const idx1 = (pizzas || []).findIndex((p: any) => p.id === firstPizzaId);
+        const idx2 = (pizzas || []).findIndex((p: any) => p.id === pizzaId);
+        if (idx1 < 0 || idx1 >= 13 || idx2 < 0 || idx2 >= 13) return;
+      }
+
+      const rozmiar: "mala" | "srednia" | "duza" = currentPizzaSize;
+      let cena: number;
+
+      if (isKupony) {
+        // W trybie KUPONY: średnia = 0 zł (+ 4 zł pół na pół), duża = 10 zł (+ 4 zł pół na pół)
+        const rozmiarKupon: "srednia" | "duza" = currentPizzaSize === "duza" ? "duza" : "srednia";
+        cena = (rozmiarKupon === "srednia" ? 0 : 10) + 4;
+      } else {
+        // Standardowa cena: max z obu pizz + 4 PLN
+        cena = Math.max(
+          currentPizzaSize === "mala" ? firstPizza.cena_mala : 
+          currentPizzaSize === "srednia" ? firstPizza.cena_srednia : 
+          firstPizza.cena_duza,
+          currentPizzaSize === "mala" ? pizza.cena_mala : 
+          currentPizzaSize === "srednia" ? pizza.cena_srednia : 
+          pizza.cena_duza
+        ) + 4;
+      }
+
+      const newPizza: PizzaSelection = {
+        id: firstPizza.id,
+        nazwa: `${firstPizza.nazwa} / ${pizza.nazwa} (pół na pół)`,
+        rozmiar,
+        cena,
+        isKupony: isKupony,
+        polNaPol: {
+          id: pizza.id,
+          nazwa: pizza.nazwa,
+        },
+      };
+
+      setOrderData(prev => ({
+        ...prev,
+        pizze: [...prev.pizze, newPizza],
+      }));
+
+      setShowPolNaPolSelector(false);
+      setFirstPizzaId(null);
+      setIsPolNaPol(false);
+      setSelectedPizzas(new Set());
+      setCurrentPizzaSize(isKupony ? "srednia" : "mala");
+      setShowAddPizza(false);
+      return;
+    }
+
+    // Jeśli to pierwsza pizza i wybrano opcję "pół na pół"
+    if (isPolNaPol) {
+      // W trybie KUPONY sprawdź czy pizza jest w pierwszych 13
+      if (isKupony) {
+        const idx = (pizzas || []).findIndex((p: any) => p.id === pizzaId);
+        if (idx < 0 || idx >= 13) return;
+      }
+      setFirstPizzaId(pizzaId);
+      setShowPolNaPolSelector(true);
+      return;
+    }
 
     // Tryb KUPONY: dozwolone tylko pierwsze 13 pozycji listy, rozmiar średnia (0 zł) lub duża (+10 zł)
     if (isKupony) {
@@ -212,51 +365,6 @@ export default function Home() {
       setSelectedPizzas(new Set());
       setCurrentPizzaSize("srednia");
       setShowAddPizza(false);
-      return;
-    }
-
-    // Jeśli wybieramy drugą pizzę dla opcji "pół na pół"
-    if (showPolNaPolSelector && firstPizzaId) {
-      const firstPizza = pizzas?.find((p: any) => p.id === firstPizzaId);
-      if (!firstPizza) return;
-
-      const newPizza: PizzaSelection = {
-        id: firstPizza.id,
-        nazwa: `${firstPizza.nazwa} / ${pizza.nazwa} (pół na pół)`,
-        rozmiar: currentPizzaSize,
-        cena: Math.max(
-          currentPizzaSize === "mala" ? firstPizza.cena_mala : 
-          currentPizzaSize === "srednia" ? firstPizza.cena_srednia : 
-          firstPizza.cena_duza,
-          currentPizzaSize === "mala" ? pizza.cena_mala : 
-          currentPizzaSize === "srednia" ? pizza.cena_srednia : 
-          pizza.cena_duza
-        ) + 4, // dopłata 4 PLN
-        isKupony: isKupony,
-        polNaPol: {
-          id: pizza.id,
-          nazwa: pizza.nazwa,
-        },
-      };
-
-      setOrderData(prev => ({
-        ...prev,
-        pizze: [...prev.pizze, newPizza],
-      }));
-
-      setShowPolNaPolSelector(false);
-      setFirstPizzaId(null);
-      setIsPolNaPol(false);
-      setSelectedPizzas(new Set());
-      setCurrentPizzaSize("mala");
-      setShowAddPizza(false);
-      return;
-    }
-
-    // Jeśli to pierwsza pizza i wybrano opcję "pół na pół"
-    if (isPolNaPol) {
-      setFirstPizzaId(pizzaId);
-      setShowPolNaPolSelector(true);
       return;
     }
 
@@ -435,6 +543,33 @@ export default function Home() {
     try {
       console.log("Składanie zamówienia:", orderData);
       
+      // Przygotuj obiekt modyfikacjeSkladnikow
+      const modyfikacjeSkladnikow: Record<string, Record<string, number>> = {};
+      orderData.pizze.forEach((pizza, index) => {
+        if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
+          const modsByName: Record<string, number> = {};
+          const pizzaDef = pizzas?.find(p => p.id === pizza.id);
+          
+          Object.entries(pizza.modifications).forEach(([skladnikIdStr, change]) => {
+            const skladnikId = parseInt(skladnikIdStr);
+            const skladnik = skladniki?.find(s => s.id === skladnikId);
+            if (skladnik) {
+              const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+              const baseCount = isBase ? 1 : 0;
+              const totalCount = baseCount + change;
+              
+              if (totalCount > 0) {
+                modsByName[skladnik.nazwa] = totalCount;
+              }
+            }
+          });
+          
+          if (Object.keys(modsByName).length > 0) {
+            modyfikacjeSkladnikow[index.toString()] = modsByName;
+          }
+        }
+      });
+      
       const result = await placeOrderMutation.mutateAsync({
         telefon: orderData.telefon,
         adres: orderData.adres,
@@ -452,6 +587,8 @@ export default function Home() {
         typZamowienia: typZamowienia,
         skladniki: generateSkladnikiString(),
         customDeliveryPrice: customDeliveryPrice ?? undefined,
+        sesjaId: (typZamowienia === "dowoz" && wybranaSesjaId) ? wybranaSesjaId : undefined,
+        modyfikacjeSkladnikow: Object.keys(modyfikacjeSkladnikow).length > 0 ? modyfikacjeSkladnikow : undefined,
       });
 
       console.log("Wynik zamówienia:", result);
@@ -599,7 +736,6 @@ export default function Home() {
                         // Reset dzielnicy przy zmianie ulicy - aby backend szukał we wszystkich dzielnicach
                         setMiejscowosc("");
                         setUserManuallyChangedDzielnica(false);
-                        setAddressNotRecognized(false);
                       }}
                       onFocus={() => {
                         // Pokaż sugestie tylko jeśli użytkownik wpisuje coś nowego
@@ -681,7 +817,6 @@ export default function Home() {
                         // Reset dzielnicy przy zmianie numeru - aby backend szukał we wszystkich dzielnicach
                         setMiejscowosc("");
                         setUserManuallyChangedDzielnica(false);
-                        setAddressNotRecognized(false);
                       }}
                       className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                       placeholder="Numer"
@@ -794,9 +929,19 @@ export default function Home() {
                       
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                         {skladniki?.map((skladnik: any) => {
-                          // Sprawdź czy składnik jest w bazie pizzy
+                          // Sprawdź czy składnik jest w bazie pierwszej pizzy
                           const pizzaDef = pizzas?.find(p => p.id === pizza.id);
-                          const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id);
+                          const isBaseInFirst = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id);
+                          
+                          // Sprawdź czy składnik jest w bazie drugiej pizzy (dla pół na pół)
+                          let isBaseInSecond = false;
+                          if (pizza.polNaPol) {
+                            const pizzaDef2 = pizzas?.find(p => p.id === pizza.polNaPol?.id);
+                            isBaseInSecond = pizzaDef2?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id) || false;
+                          }
+                          
+                          // Składnik jest bazowy jeśli jest w którejkolwiek z pizz
+                          const isBase = isBaseInFirst || isBaseInSecond;
                           const baseCount = isBase ? 1 : 0;
                           const modification = pizza.modifications?.[skladnik.id] || 0;
                           const currentCount = baseCount + modification;
@@ -937,8 +1082,7 @@ export default function Home() {
                     <label className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={isPolNaPol && !isKupony}
-                        disabled={isKupony}
+                        checked={isPolNaPol}
                         onChange={(e) => setIsPolNaPol(e.target.checked)}
                         className="mr-2"
                       />
@@ -974,7 +1118,7 @@ export default function Home() {
                         type="button"
                         onClick={() => handlePizzaSelect(pizza.id)}
                         className={`p-4 border-2 rounded-lg text-center hover:border-blue-500 transition-colors ${
-                          selectedPizzas.has(pizza.id) ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+                          selectedPizzas.has(pizza.id) || firstPizzaId === pizza.id ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
                         }`}
                       >
                         <div className="text-xs font-medium mb-2">{pizza.nazwa}</div>
@@ -1197,6 +1341,38 @@ export default function Home() {
                 </label>
               </div>
             </div>
+
+            {/* Wybór kierowcy */}
+            {!sesjeLoading && aktywneSesje && aktywneSesje.length > 0 && typZamowienia === "dowoz" && (
+              <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-300">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {aktywneSesje.length === 1 ? "🚗 Kierowca:" : "🚗 Wybierz kierowcę:"}
+                </label>
+                {aktywneSesje.length === 1 ? (
+                  <div className="text-lg font-semibold text-blue-700 text-center p-2">
+                    {aktywneSesje[0].kierowca.nazwa}
+                  </div>
+                ) : (
+                  <select
+                    value={wybranaSesjaId ?? ""}
+                    onChange={(e) => setWybranaSesjaId(e.target.value ? parseInt(e.target.value) : null)}
+                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-lg"
+                  >
+                    <option value="">-- Wybierz kierowcę --</option>
+                    {aktywneSesje.map((sesja: any) => (
+                      <option key={sesja.id} value={sesja.id}>
+                        {sesja.kierowca.nazwa}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {orderData.platnosc === "gotowka" && (
+                  <p className="text-xs text-gray-600 mt-2 text-center">
+                    💰 Płatność gotówką zostanie automatycznie dodana jako wpływ do sesji kierowcy
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Podsumowanie ceny */}
             <div className="bg-gray-50 p-4 rounded-lg">

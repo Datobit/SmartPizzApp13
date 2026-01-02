@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Baza danych MariaDB
+  mariadb:
+    image: mariadb:11.2
+    container_name: smartpizza-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: SmartPizzApp13
+      MYSQL_USER: smartpizza
+      MYSQL_PASSWORD: pizzapass123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      # Opcjonalnie: zaimportuj dump bazy przy pierwszym uruchomieniu
+      # - ./smartpizzapp13-T3.db:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - smartpizza-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Aplikacja Next.js
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartpizza-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "mysql://smartpizza:pizzapass123@mariadb:3306/SmartPizzApp13"
+      NODE_ENV: production
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - smartpizza-network
+    # Uruchom migracje Prisma przed startem
+    command: sh -c "npx prisma migrate deploy && node server.js"
+
+networks:
+  smartpizza-network:
+    driver: bridge
+
+volumes:
+  mariadb_data:

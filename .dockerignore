@@ -1,0 +1,39 @@
+# Node
+node_modules
+npm-debug.log
+
+# Next.js
+.next
+out
+*.log
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Git
+.git
+.gitignore
+
+# Testing
+coverage
+
+# Editor
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.db-journal
+smartpizzapp13-T3.db
+
+# Other
+README.md
+*.md
+update-ulice-from-csv.mjs
+SMARTPIZZAPP13_ULICE_fulll_final.csv

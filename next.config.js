@@ -6,6 +6,8 @@ const config = {
     locales: ["en"],
     defaultLocale: "en",
   },
+  // Standalone output dla Docker
+  output: 'standalone',
 };
 
 export default config;

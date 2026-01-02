@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lista Zakupów - SmartPizzApp</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 2.5em;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .controls {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      background: white;
+      color: #667eea;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      transition: all 0.3s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+    
+    .btn-print {
+      background: #10b981;
+      color: white;
+    }
+    
+    .btn-clear {
+      background: #ef4444;
+      color: white;
+    }
+    
+    .btn-select-all {
+      background: #3b82f6;
+      color: white;
+    }
+    
+    .section {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    
+    .section h2 {
+      color: #667eea;
+      margin-bottom: 20px;
+      font-size: 1.8em;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 12px;
+    }
+    
+    .items-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 15px;
+    }
+    
+    .item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      transition: all 0.2s;
+      cursor: pointer;
+      background: #f9fafb;
+    }
+    
+    .item:hover {
+      border-color: #667eea;
+      background: #f3f4f6;
+      transform: translateX(5px);
+    }
+    
+    .item input[type="checkbox"] {
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      margin-right: 12px;
+      accent-color: #667eea;
+    }
+    
+    .item label {
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 500;
+      color: #374151;
+      user-select: none;
+      flex: 1;
+    }
+    
+    .item.checked {
+      background: #e0e7ff;
+      border-color: #667eea;
+    }
+    
+    .item.checked label {
+      color: #667eea;
+      font-weight: 600;
+    }
+    
+    @media print {
+      body {
+        background: white;
+        padding: 20px;
+      }
+      
+      .controls {
+        display: none;
+      }
+      
+      .section {
+        box-shadow: none;
+        page-break-inside: avoid;
+      }
+      
+      .item {
+        border: 1px solid #ccc;
+      }
+      
+      .item:not(.checked) {
+        display: none;
+      }
+      
+      h1 {
+        color: #333;
+        text-shadow: none;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .items-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      h1 {
+        font-size: 1.8em;
+      }
+      
+      .controls {
+        flex-direction: column;
+      }
+      
+      .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🛒 Lista Zakupów</h1>
+    
+    <div class="controls">
+      <button class="btn" onclick="window.location.href='/'">← Powrót</button>
+      <button class="btn btn-select-all" onclick="zaznaczWszystko()">✓ Zaznacz wszystko</button>
+      <button class="btn btn-clear" onclick="odznaczWszystko()">✗ Odznacz wszystko</button>
+      <button class="btn btn-print" onclick="window.print()">🖨️ Drukuj listę</button>
+    </div>
+    
+    <!-- Sekcja 1: Podstawy -->
+    <div class="section">
+      <h2>📦 Podstawowe składniki</h2>
+      <div class="items-grid" id="sekcja1">
+        <!-- Generowane przez JS -->
+      </div>
+    </div>
+    
+    <!-- Sekcja 2: Mięsa -->
+    <div class="section">
+      <h2>🥓 Mięsa i wędliny</h2>
+      <div class="items-grid" id="sekcja2">
+        <!-- Generowane przez JS -->
+      </div>
+    </div>
+    
+    <!-- Sekcja 3: Warzywa -->
+    <div class="section">
+      <h2>🥬 Warzywa i dodatki</h2>
+      <div class="items-grid" id="sekcja3">
+        <!-- Generowane przez JS -->
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const sekcja1 = [
+      'sos',
+      'majonez',
+      'ser',
+      'serek górski',
+      'ser grana padano',
+      'zioła',
+      'pieprz',
+      'tabasco',
+      'czosnek',
+      'curry',
+      'chili',
+      'oregano'
+    ];
+    
+    const sekcja2 = [
+      'salami',
+      'szynka',
+      'boczek',
+      'kiełbasa',
+      'kabanosy',
+      'kurczak',
+      'kebab',
+      'szynka długodojrzewająca',
+      'tuńczyk',
+      'krewetki',
+      'małże'
+    ];
+    
+    const sekcja3 = [
+      'pieczarki',
+      'cebula',
+      'papryka',
+      'oliwki',
+      'groszek',
+      'pomidor',
+      'jalapeno',
+      'kukurydza',
+      'kapary',
+      'szparagi',
+      'szpinak',
+      'brokuły',
+      'bazylia',
+      'fasola',
+      'ogórek konserwowy',
+      'szczypiorek',
+      'pomidorki koktajlowe',
+      'rukola',
+      'ananas',
+      'brzoskwinie'
+    ];
+    
+    function renderItems(items, containerId) {
+      const container = document.getElementById(containerId);
+      items.forEach((item, index) => {
+        const id = `${containerId}_${index}`;
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.onclick = () => toggleCheckbox(id);
+        
+        div.innerHTML = `
+          <input type="checkbox" id="${id}" onchange="updateItemStyle('${id}')">
+          <label for="${id}">${item}</label>
+        `;
+        
+        container.appendChild(div);
+      });
+    }
+    
+    function toggleCheckbox(id) {
+      const checkbox = document.getElementById(id);
+      checkbox.checked = !checkbox.checked;
+      updateItemStyle(id);
+    }
+    
+    function updateItemStyle(id) {
+      const checkbox = document.getElementById(id);
+      const item = checkbox.closest('.item');
+      
+      if (checkbox.checked) {
+        item.classList.add('checked');
+      } else {
+        item.classList.remove('checked');
+      }
+      
+      zapiszStan();
+    }
+    
+    function zaznaczWszystko() {
+      const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+        updateItemStyle(checkbox.id);
+      });
+    }
+    
+    function odznaczWszystko() {
+      const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+        updateItemStyle(checkbox.id);
+      });
+    }
+    
+    function zapiszStan() {
+      const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+      const stan = {};
+      
+      checkboxes.forEach(checkbox => {
+        stan[checkbox.id] = checkbox.checked;
+      });
+      
+      localStorage.setItem('zakupy_lista', JSON.stringify(stan));
+    }
+    
+    function wczytajStan() {
+      const stanStr = localStorage.getItem('zakupy_lista');
+      if (!stanStr) return;
+      
+      try {
+        const stan = JSON.parse(stanStr);
+        
+        Object.keys(stan).forEach(id => {
+          const checkbox = document.getElementById(id);
+          if (checkbox) {
+            checkbox.checked = stan[id];
+            updateItemStyle(id);
+          }
+        });
+      } catch (error) {
+        console.error('Błąd wczytywania stanu:', error);
+      }
+    }
+    
+    // Inicjalizacja
+    renderItems(sekcja1, 'sekcja1');
+    renderItems(sekcja2, 'sekcja2');
+    renderItems(sekcja3, 'sekcja3');
+    wczytajStan();
+  </script>
+</body>
+</html>

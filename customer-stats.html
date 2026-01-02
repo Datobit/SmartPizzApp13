@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📊 Statystyki Klientów</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 40px;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+      text-align: center;
+      font-size: 2.5em;
+    }
+    
+    .back-btn {
+      background: #6c757d;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-bottom: 20px;
+      transition: all 0.3s;
+    }
+    
+    .back-btn:hover {
+      background: #5a6268;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    .search-container {
+      background: #f8f9fa;
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .search-input {
+      width: 100%;
+      padding: 15px 20px;
+      font-size: 18px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      transition: border 0.3s;
+    }
+    
+    .search-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .search-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px 40px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: bold;
+      width: 100%;
+      transition: all 0.3s;
+    }
+    
+    .search-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      transition: transform 0.3s;
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-5px);
+    }
+    
+    .stat-value {
+      font-size: 3em;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    
+    .stat-label {
+      font-size: 1.1em;
+      opacity: 0.9;
+    }
+    
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 30px;
+      margin-bottom: 30px;
+    }
+    
+    .chart-container {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .chart-title {
+      font-size: 1.4em;
+      color: #333;
+      margin-bottom: 20px;
+      text-align: center;
+      font-weight: 600;
+    }
+    
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .history-table th {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px;
+      text-align: left;
+      font-weight: 600;
+    }
+    
+    .history-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .history-table tr:hover {
+      background: #f8f9fa;
+    }
+    
+    .no-data {
+      text-align: center;
+      padding: 60px;
+      color: #999;
+      font-size: 1.3em;
+    }
+    
+    .hidden {
+      display: none;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      font-size: 1.5em;
+      color: #667eea;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <button class="back-btn" onclick="window.location.href='/'">← Powrót do zamówień</button>
+    
+    <h1>📊 Statystyki Klientów</h1>
+    
+    <div class="search-container">
+      <input 
+        type="text" 
+        id="searchInput" 
+        class="search-input" 
+        placeholder="Wpisz numer telefonu lub adres (np. 123456789 lub Rondo)..."
+      >
+      <button class="search-btn" onclick="searchStats()">🔍 Szukaj statystyk</button>
+    </div>
+    
+    <div id="loadingDiv" class="loading hidden">
+      ⏳ Ładowanie danych...
+    </div>
+    
+    <div id="resultsDiv" class="hidden">
+      <!-- Metryki -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="totalOrders">0</div>
+          <div class="stat-label">📊 Liczba zamówień</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalAmount">0 PLN</div>
+          <div class="stat-label">💰 Łączna kwota</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="avgAmount">0 PLN</div>
+          <div class="stat-label">📈 Średnia kwota zamówienia</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="couponPercent">0%</div>
+          <div class="stat-label">🎫 Udział kuponów</div>
+          <div style="font-size: 0.9em; margin-top: 10px; opacity: 0.8;" id="couponDetails">(0/0)</div>
+        </div>
+      </div>
+      
+      <!-- Wykresy - rząd 1: Pizze i Kupony -->
+      <div class="charts-grid" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="chart-container">
+          <h3 class="chart-title">🍕 Najczęściej zamawiane pizze</h3>
+          <canvas id="pizzaChart"></canvas>
+        </div>
+        
+        <div class="chart-container">
+          <h3 class="chart-title">🎫 Kupony vs Standardowe</h3>
+          <canvas id="couponChart"></canvas>
+        </div>
+      </div>
+      
+      <!-- Wykresy - rząd 2: Dni tygodnia i Pory dnia -->
+      <div class="charts-grid" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="chart-container">
+          <h3 class="chart-title">📅 Zamówienia wg dni tygodnia</h3>
+          <canvas id="weekdayChart"></canvas>
+        </div>
+        
+        <div class="chart-container">
+          <h3 class="chart-title">🕐 Zamówienia wg pory dnia</h3>
+          <canvas id="timeChart"></canvas>
+        </div>
+      </div>
+      
+      <!-- Historia -->
+      <div class="chart-container" style="grid-column: 1 / -1;">
+        <h3 class="chart-title">📜 Historia zamówień</h3>
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th id="contactHeader">Telefon/Adres</th>
+              <th>Pizze</th>
+              <th>Cena</th>
+              <th>Płatność</th>
+              <th>Kupony</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div id="noDataDiv" class="no-data hidden">
+      🔍 Nie znaleziono zamówień dla podanego numeru telefonu lub adresu
+    </div>
+  </div>
+  
+  <script>
+    let charts = {};
+    
+    async function searchStats() {
+      const query = document.getElementById('searchInput').value.trim();
+      
+      if (!query) {
+        alert('Wprowadź numer telefonu lub adres!');
+        return;
+      }
+      
+      // Pokaż loading
+      document.getElementById('loadingDiv').classList.remove('hidden');
+      document.getElementById('resultsDiv').classList.add('hidden');
+      document.getElementById('noDataDiv').classList.add('hidden');
+      
+      try {
+        const response = await fetch(`/customer-stats?query=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        
+        if (!data.orders || data.orders.length === 0) {
+          document.getElementById('loadingDiv').classList.add('hidden');
+          document.getElementById('noDataDiv').classList.remove('hidden');
+          return;
+        }
+        
+        // Przetwórz dane i wyświetl
+        processAndDisplayData(data.orders, data.pizzas, query);
+        
+        document.getElementById('loadingDiv').classList.add('hidden');
+        document.getElementById('resultsDiv').classList.remove('hidden');
+        
+      } catch (error) {
+        alert('Błąd: ' + error.message);
+        document.getElementById('loadingDiv').classList.add('hidden');
+      }
+    }
+    
+    function processAndDisplayData(orders, pizzas, query) {
+      // Metryki
+      const totalOrders = orders.length;
+      const totalAmount = orders.reduce((sum, o) => sum + (parseFloat(o.cena_calkowita) || 0), 0);
+      const avgAmount = totalAmount / totalOrders;
+      
+      // Kupony
+      const couponOrders = orders.filter(o => o.is_kupony === 1).length;
+      const couponPercent = ((couponOrders / totalOrders) * 100).toFixed(2);
+      
+      document.getElementById('totalOrders').textContent = totalOrders;
+      document.getElementById('totalAmount').textContent = totalAmount.toFixed(2) + ' PLN';
+      document.getElementById('avgAmount').textContent = avgAmount.toFixed(2) + ' PLN';
+      document.getElementById('couponPercent').textContent = couponPercent + '%';
+      document.getElementById('couponDetails').textContent = `(${couponOrders}/${totalOrders})`;
+      
+      // Analiza pizz
+      const pizzaCount = {};
+      orders.forEach(order => {
+        if (order.pizze) {
+          try {
+            const pizzeArray = JSON.parse(order.pizze);
+            pizzeArray.forEach(pizza => {
+              const pizzaData = pizzas.find(p => p.id === pizza.id);
+              const name = pizzaData ? pizzaData.nazwa : `Pizza ${pizza.id}`;
+              pizzaCount[name] = (pizzaCount[name] || 0) + 1;
+            });
+          } catch (e) {}
+        }
+      });
+      
+      // Kupony vs standardowe
+      const standardOrders = totalOrders - couponOrders;
+      
+      // Dni tygodnia
+      const weekdayCount = [0, 0, 0, 0, 0, 0, 0]; // Niedz, Pon, Wt, Śr, Czw, Pt, Sob
+      orders.forEach(order => {
+        const date = new Date(order.created_at);
+        weekdayCount[date.getDay()]++;
+      });
+      
+      // Pory dnia
+      const timeCount = { rano: 0, dzien: 0, wieczor: 0 };
+      orders.forEach(order => {
+        const date = new Date(order.created_at);
+        const hour = date.getHours();
+        if (hour >= 11 && hour < 15) timeCount.rano++;
+        else if (hour >= 15 && hour < 19) timeCount.dzien++;
+        else if (hour >= 19 && hour <= 23) timeCount.wieczor++;
+      });
+      
+      // Wykresy
+      createPizzaChart(pizzaCount);
+      createCouponChart(couponOrders, standardOrders);
+      createWeekdayChart(weekdayCount);
+      createTimeChart(timeCount);
+      
+      // Historia
+      displayHistory(orders, pizzas, query);
+    }
+    
+    function createPizzaChart(pizzaCount) {
+      const ctx = document.getElementById('pizzaChart');
+      if (charts.pizza) charts.pizza.destroy();
+      
+      const sortedPizzas = Object.entries(pizzaCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+      
+      charts.pizza = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: sortedPizzas.map(p => p[0]),
+          datasets: [{
+            data: sortedPizzas.map(p => p[1]),
+            backgroundColor: [
+              '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+              '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom' }
+          }
+        }
+      });
+    }
+    
+    function createCouponChart(coupon, standard) {
+      const ctx = document.getElementById('couponChart');
+      if (charts.coupon) charts.coupon.destroy();
+      
+      charts.coupon = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Kupony', 'Standardowe'],
+          datasets: [{
+            data: [coupon, standard],
+            backgroundColor: ['#FF6384', '#36A2EB']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom' }
+          }
+        }
+      });
+    }
+    
+    function createWeekdayChart(weekdayCount) {
+      const ctx = document.getElementById('weekdayChart');
+      if (charts.weekday) charts.weekday.destroy();
+      
+      charts.weekday = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Niedz', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'],
+          datasets: [{
+            label: 'Liczba zamówień',
+            data: weekdayCount,
+            backgroundColor: '#667eea'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+    
+    function createTimeChart(timeCount) {
+      const ctx = document.getElementById('timeChart');
+      if (charts.time) charts.time.destroy();
+      
+      charts.time = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Rano (11-14)', 'Dzień (15-18)', 'Wieczór (19-23)'],
+          datasets: [{
+            label: 'Liczba zamówień',
+            data: [timeCount.rano, timeCount.dzien, timeCount.wieczor],
+            backgroundColor: ['#FFCE56', '#36A2EB', '#FF6384']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+    
+    function displayHistory(orders, pizzas, query) {
+      const tbody = document.getElementById('historyBody');
+      tbody.innerHTML = '';
+      
+      // Sprawdź czy query to telefon (same cyfry lub cyfry ze spacjami)
+      const isPhoneQuery = /^[0-9\s]+$/.test(query);
+      
+      // Zaktualizuj nagłówek kolumny
+      const header = document.getElementById('contactHeader');
+      header.textContent = isPhoneQuery ? 'Adres' : 'Telefon';
+      
+      orders.forEach(order => {
+        const date = new Date(order.created_at).toLocaleString('pl-PL');
+        
+        // Wybierz co pokazać w kolumnie kontaktu
+        const contactInfo = isPhoneQuery ? order.adres : order.telefon;
+        
+        let pizzeText = '-';
+        if (order.pizze) {
+          try {
+            const pizzeArray = JSON.parse(order.pizze);
+            pizzeText = pizzeArray.map(pizza => {
+              const pizzaData = pizzas.find(p => p.id === pizza.id);
+              return pizzaData ? pizzaData.nazwa : `Pizza ${pizza.id}`;
+            }).join(', ');
+          } catch (e) {}
+        }
+        
+        const row = `
+          <tr>
+            <td>${date}</td>
+            <td>${contactInfo || '-'}</td>
+            <td>${pizzeText}</td>
+            <td>${order.cena_calkowita} PLN</td>
+            <td>${order.platnosc}</td>
+            <td>${order.is_kupony === 1 ? '✅' : '❌'}</td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
+    }
+    
+    // Enter key support
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') searchStats();
+    });
+  </script>
+</body>
+</html>
