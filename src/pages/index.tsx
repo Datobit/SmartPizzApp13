@@ -570,6 +570,9 @@ export default function Home() {
         }
       });
       
+      // Sprawdź czy którakolwiek pizza ma isKupony = true
+      const hasKupony = orderData.pizze.some(p => p.isKupony === true);
+      
       const result = await placeOrderMutation.mutateAsync({
         telefon: orderData.telefon,
         adres: orderData.adres,
@@ -583,7 +586,7 @@ export default function Home() {
         napojeIds: orderData.napojeIds,
         pozycjeExtraIds: orderData.pozycjeExtraIds,
         platnosc: orderData.platnosc,
-        isKupony: isKupony,
+        isKupony: hasKupony || isKupony, // true jeśli którakolwiek pizza ma kupony LUB zaznaczony checkbox
         typZamowienia: typZamowienia,
         skladniki: generateSkladnikiString(),
         customDeliveryPrice: customDeliveryPrice ?? undefined,
@@ -1297,8 +1300,8 @@ export default function Home() {
                   type="button"
                   onClick={() => {
                     if (napoje && napoje.length > 0) {
-                      // Znajdź napój "0,85" lub pierwszy dostępny
-                      const napoj085 = napoje.find((n: any) => n.nazwa.includes("0,85"));
+                      // Znajdź napój "0,85" (priorytet) lub "85" jako domyślny
+                      const napoj085 = napoje.find((n: any) => n.nazwa.includes("0,85") || n.nazwa.includes("0.85") || (n.nazwa.includes("napoje") && n.cena === 10));
                       const defaultNapojId = napoj085 ? napoj085.id : napoje[0].id;
                       setOrderData(prev => ({ 
                         ...prev, 

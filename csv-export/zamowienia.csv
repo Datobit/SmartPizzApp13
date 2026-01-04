@@ -1,0 +1,72 @@
+id,telefon,adres,pizze,sosy,napoj,pozycje_extra,platnosc,cena_calkowita,created_at,is_kupony,typ_zamowienia,skladniki,sesja_id
+"1","","","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","40",""2025-12-02T15:31:06.000Z"","0","na_miejscu","PEPPERONI: 32+szczypiorek",
+"2","987654321","Rondo im. Bartłomieja Kołodzieja, 2/99, 3#2861 kod do klatki","[{""id"":28,""rozmiar"":""duza""}]","{""pomidorowy"":2,""czosnkowy"":0}",,"[]","karta","59",""2025-12-09T19:50:33.000Z"","0","dowoz","CARLO: 2+salami, -pomidor",
+"3","123456789","Zduńska, 3/6","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","karta","49",""2025-12-09T21:10:26.000Z"","0","dowoz",,
+"4","123456789","Zduńska, 3/6","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}","7","[]","gotowka","55",""2025-12-09T21:11:32.000Z"","0","dowoz","PEPPERONI: +tabasco",
+"5","732049017","Broniewskiego, 26/125, 11 pietro","[{""id"":36,""rozmiar"":""srednia""}]","{""pomidorowy"":0,""czosnkowy"":2}","10","[]","karta","61",""2025-12-10T20:11:15.000Z"","0","dowoz",,
+"6","732049017","Broniewskiego, 26/125, 11pietro","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":1,""czosnkowy"":2}","8","[]","karta","55",""2025-12-11T16:15:26.000Z"","0","dowoz",,
+"7","123456789","Izabeli Zbiegniewskiej 4, 4","[{""id"":13,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","karta","54",""2025-12-12T22:08:52.000Z"","0","dowoz","TRZYNASTKA: -groszek",
+"8","123456789","adresnieznany, 1, m. 1","[{""id"":1,""rozmiar"":""mala""}]","{""pomidorowy"":3,""czosnkowy"":0}",,"[]","gotowka","56",""2025-12-13T01:20:50.000Z"","0","dowoz",,
+"9","123456789","Pogodna, 1, m. 250, 2252","[{""id"":13,""rozmiar"":""mala""}]","{""pomidorowy"":0,""czosnkowy"":1}",,"[]","gotowka","33",""2025-12-13T01:24:41.000Z"","0","dowoz","TRZYNASTKA: -groszek",
+"10","123456789","Armii Krajowej, 5, m. 5","[{""id"":8,""rozmiar"":""srednia""}]","{""pomidorowy"":0,""czosnkowy"":2}","8","[]","gotowka","42",""2025-12-13T01:38:34.000Z"","0","dowoz",,
+"11","123456789","Michelińska, 5","[{""id"":19,""rozmiar"":""srednia""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","49",""2025-12-13T01:44:34.000Z"","0","dowoz",,
+"12","123456789","Dojazdowa, 55","[{""id"":20,""rozmiar"":""srednia""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","40",""2025-12-13T01:50:46.000Z"","0","dowoz",,
+"13","123456789","Ostrowska, 2, m. 60","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","karta","49",""2025-12-13T22:05:36.000Z"","0","dowoz","PEPPERONI: 10+krewetki",
+"14","123456789","Elizy Orzeszkowej, 4","[{""id"":5,""rozmiar"":""srednia""}]","{""pomidorowy"":0,""czosnkowy"":1}",,"[]","karta","36",""2025-12-13T23:19:23.000Z"","0","dowoz",,
+"15","697394666","Stanisława Moniuszki, 1, m. 59","[{""id"":28,""rozmiar"":""duza""}]","{""pomidorowy"":1,""czosnkowy"":2}",,"[]","karta","56",""2025-12-19T09:53:50.000Z"","0","dowoz",,
+"16","123456789","Grunwaldzka, 2","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","40",""2025-12-19T10:07:56.000Z"","0","dowoz",,
+"17","123456789","Grunwaldzka, 2","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","45",""2025-12-19T10:08:34.000Z"","0","dowoz",,
+"18","123456789","Grunwaldzka, 2","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","10",""2025-12-19T10:17:20.000Z"","0","dowoz",,
+"19","123456789","Grunwaldzka, 2","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","10",""2025-12-19T10:19:17.000Z"","0","dowoz",,
+"20","123456789","Grunwaldzka, 2","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","10",""2025-12-19T10:22:34.000Z"","0","dowoz",,
+"21","123456789","Wiejska, 20, m. 153","[{""id"":5,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","gotowka","15",""2025-12-19T10:35:48.000Z"","0","dowoz",,
+"22","663010385","Dziewińska, 26, m. 25","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":2}","12","[]","gotowka","49",""2025-12-19T10:49:27.000Z"","0","dowoz",,
+"23","693533458","Celulozowa, 27, m. 2","[{""id"":20,""rozmiar"":""duza""}]","{""pomidorowy"":1,""czosnkowy"":1}","[{""id"":3,""nazwa"":""piwo bezalkoholowe"",""cena"":8}]","[]","gotowka","62",""2025-12-19T10:54:13.000Z"","0","dowoz",,
+"24","693533458","Celulozowa, 27, m. 2","[{""id"":22,""rozmiar"":""duza""}]","{""pomidorowy"":1,""czosnkowy"":1}","[{""id"":7,""nazwa"":""napoje 0,85"",""cena"":10},{""id"":10,""nazwa"":""piwo bezalkoholowe"",""cena"":8}]","[]","karta","72",""2025-12-19T10:56:37.000Z"","0","dowoz",,
+"25","723753862","Św. Antoniego, 5A, m. 15","[{""id"":32,""rozmiar"":""duza""}]","{""pomidorowy"":1,""czosnkowy"":1}","[{""id"":14,""nazwa"":""napoje 0,85"",""cena"":10}]","[]","karta","69",""2025-12-19T11:20:34.000Z"","0","dowoz",,
+"26","123456789","Parafialna, 2a","[{""id"":8,""rozmiar"":""duza"",""isKupon"":true}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","15",""2025-12-19T11:39:32.000Z"","0","dowoz",,
+"27","123456789","Izabeli Zbiegniewskiej, 20d","[{""id"":8,""rozmiar"":""duza"",""isKupon"":true},{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","50",""2025-12-19T12:47:40.000Z"","0","dowoz",,
+"28","","","[{""id"":8,""rozmiar"":""duza"",""isKupon"":true}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","10",""2025-12-19T12:50:41.000Z"","1","na_wynos",,
+"29","123456789","Izabeli Zbiegniewskiej, 20d","[{""id"":8,""rozmiar"":""duza""},{""id"":8,""rozmiar"":""duza"",""isKupon"":true}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","karta","50",""2025-12-19T12:51:30.000Z"","1","dowoz",,
+"30","666842872","Św. Antoniego, 49, orto-dent","[{""id"":9,""rozmiar"":""duza"",""polNaPol"":{""id"":36}}]","{""pomidorowy"":1,""czosnkowy"":1}",,"[]","gotowka","63",""2025-12-19T16:49:47.000Z"","0","dowoz",,
+"31","123456789","Płocka, 131, m. 2","[{""id"":7,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","46",""2025-12-22T12:19:33.000Z"","0","dowoz",,
+"32","123456789","Dolna, 5","[{""id"":11,""rozmiar"":""srednia""}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","gotowka","48",""2025-12-22T12:22:20.000Z"","0","dowoz",,"5"
+"33","123456789","Królewiecka, 56","[{""id"":19,""rozmiar"":""srednia""}]","{""pomidorowy"":0,""czosnkowy"":1}",,"[]","gotowka","51",""2025-12-22T12:24:44.000Z"","0","dowoz",,"7"
+"34","123456789","Królewiecka, 56","[{""id"":15,""rozmiar"":""duza""}]","{""pomidorowy"":1,""czosnkowy"":0}",,"[]","karta","52",""2025-12-22T12:25:43.000Z"","0","dowoz",,"7"
+"35","123456789","Dziewińska, 6","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","karta","40",""2025-12-22T18:23:16.000Z"","0","dowoz",,
+"36","123456789","Zduńska, 2, m. 5","[{""id"":8,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","gotowka","19",""2025-12-22T18:45:48.000Z"","1","dowoz",,
+"37","","","[{""id"":4,""rozmiar"":""duza""}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","38",""2025-12-22T18:47:51.000Z"","0","na_miejscu",,
+"38","123456789","Zduńska, 2, m. 5","[{""id"":8,""rozmiar"":""duza"",""isKupony"":true},{""id"":8,""rozmiar"":""srednia"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":1}","[7]","[]","karta","61",""2025-12-22T21:00:24.000Z"","0","dowoz",,
+"39","123456789","Królewiecka, 5","[{""id"":19,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":1}","[7]","[]","gotowka","67",""2025-12-22T21:46:55.000Z"","0","dowoz",,
+"40","123456789","Zduńska, 2, m. 5","[{""id"":7,""rozmiar"":""srednia"",""isKupony"":true}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","gotowka","9",""2025-12-22T21:50:33.000Z"","1","dowoz",,
+"41","123456789","Kolska, 5, m. 2","[{""id"":16,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","45",""2025-12-28T11:51:38.000Z"","0","dowoz",,"9"
+"42","123456789","Kolska, 5, m. 2","[{""id"":15,""rozmiar"":""mala"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","26",""2025-12-28T11:53:10.000Z"","0","dowoz",,"10"
+"43","123456789","Barska, 18","[{""id"":20,""rozmiar"":""mala"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","30",""2025-12-28T11:54:59.000Z"","0","dowoz",,"10"
+"44","123456789","9#2!./]}`~~, 77","[{""id"":20,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","gotowka","49",""2025-12-28T12:06:15.000Z"","0","dowoz",,"12"
+"45","","","[{""id"":8,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","gotowka","44",""2025-12-28T12:08:39.000Z"","0","na_wynos",,"12"
+"46","123456789","Wieniecka, 55","[{""id"":8,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","45",""2025-12-28T12:21:00.000Z"","0","dowoz",,"11"
+"47","666666666","Niecała, 66","[{""id"":13,""rozmiar"":""srednia"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}","[7]","[]","gotowka","53",""2025-12-28T12:35:28.000Z"","0","dowoz",,"11"
+"48","987654321","adres_modyfikowany","[{""id"":12,""rozmiar"":""srednia"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","karta","0",""2025-12-28T21:34:57.000Z"","0","dowoz",,"18"
+"49","123456789","Barska, 5, m. 44","[{""id"":28,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","gotowka","59",""2025-12-28T21:36:23.000Z"","0","dowoz",,"11"
+"50","123456789","Aleja Kazimierza Wielkiego, 8","[{""id"":8,""rozmiar"":""mala"",""isKupony"":false},{""id"":19,""rozmiar"":""srednia"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","gotowka","76",""2025-12-28T21:38:39.000Z"","0","dowoz",,"15"
+"51","123456789","Kaliska, 90","[{""id"":13,""rozmiar"":""duza"",""isKupony"":true}]","{""pomidorowy"":0,""czosnkowy"":1}",,"[]","gotowka","12",""2025-12-28T21:42:30.000Z"","1","dowoz",,"14"
+"52","123456789","Kaliska, 90, m. 21","[{""id"":24,""rozmiar"":""srednia"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","45",""2025-12-28T21:43:41.000Z"","0","dowoz",,"16"
+"53","","","[{""id"":19,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","50",""2025-12-28T21:45:52.000Z"","0","na_wynos",,"16"
+"54","","","[{""id"":8,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":2}",,"[]","karta","10",""2025-12-28T21:49:57.000Z"","0","na_wynos",,
+"55","123456789","Marsa, 5","[{""id"":7,""rozmiar"":""srednia"",""isKupony"":false,""polNaPol"":{""id"":4}}]","{""pomidorowy"":0,""czosnkowy"":0}","[7]","[]","gotowka","49",""2025-12-29T22:10:17.000Z"","0","na_miejscu","OLIVIO / PROSCIUTTO (pół na pół): -oliwki, +salami",
+"56","","","[{""id"":1,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","35",""2025-12-29T22:13:10.000Z"","0","na_miejscu","MARGHARITA: -sos, -ser, -zioła",
+"57","","","[{""id"":1,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","35",""2025-12-29T22:14:58.000Z"","0","na_miejscu","MARGHARITA: +pieczarki, +cebula, +szynka",
+"58","123456789","Izabeli Zbiegniewskiej, 20daaw22","[{""id"":8,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","40",""2025-12-29T22:29:08.000Z"","0","dowoz",,"16"
+"59","123456789","Zielna, 2, m. 69","[{""id"":8,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":2}","[14]","[]","gotowka","59",""2025-12-29T22:40:53.000Z"","0","dowoz",,"20"
+"60","","","[{""id"":8,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","40",""2025-12-30T18:46:04.000Z"","0","na_miejscu","PEPPERONI: 2+salami",
+"61","","","[{""id"":8,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","46",""2025-12-30T18:57:11.000Z"","0","na_miejscu","PEPPERONI: 2+salami",
+"62","","","[{""id"":8,""rozmiar"":""duza"",""isKupony"":true}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","10",""2025-12-30T18:59:31.000Z"","1","na_miejscu","PEPPERONI: 2+szparagi",
+"63","","","[{""id"":8,""rozmiar"":""srednia"",""isKupony"":true}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","7",""2025-12-30T19:01:06.000Z"","1","na_miejscu","PEPPERONI: 2+salami, +szparagi",
+"64","","","[{""id"":8,""rozmiar"":""duza"",""isKupony"":true}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","16",""2025-12-30T19:01:36.000Z"","1","na_miejscu","PEPPERONI: 2+salami",
+"65","","Izabeli Zbiegniewskiej","[{""id"":7,""rozmiar"":""duza"",""isKupony"":false,""polNaPol"":{""id"":8}}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","57",""2025-12-30T19:11:41.000Z"","0","na_miejscu","OLIVIO / PEPPERONI (pół na pół): -cebula, 2+tuńczyk, +salami",
+"66","1234567890","Elizy Orzeszkowej, 4","[{""id"":8,""rozmiar"":""duza"",""isKupony"":true}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","130",""2025-12-30T19:13:55.000Z"","1","dowoz","PEPPERONI: 20+tuńczyk","20"
+"67","123456789","Elizy Orzeszkowej, 4","[{""id"":5,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","206",""2025-12-30T19:16:24.000Z"","0","dowoz","CAPRI: 27+krewetki","20"
+"68","123456789","byle jaka, 5","[{""id"":4,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":1}",,"[]","gotowka","60",""2025-12-30T19:20:08.000Z"","0","dowoz",,"20"
+"69","123456789","Promienna, 1","[{""id"":8,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","40",""2025-12-30T19:21:50.000Z"","0","dowoz",,
+"70","","","[{""id"":2,""rozmiar"":""duza"",""isKupony"":true}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","34",""2026-01-01T23:55:00.000Z"","1","na_miejscu","AL FUNGHI: 3+serek górski",
+"71","","","[{""id"":8,""rozmiar"":""duza"",""isKupony"":false}]","{""pomidorowy"":0,""czosnkowy"":0}",,"[]","gotowka","48",""2026-01-01T23:56:58.000Z"","0","na_miejscu","PEPPERONI: +serek górski",

@@ -123,13 +123,14 @@ model Sesja {
 }
 
 model Transakcja {
-  id              Int            @id @default(autoincrement())
+  id              Int                       @id @default(autoincrement())
   sesja_id        Int
-  sesja           Sesja          @relation(fields: [sesja_id], references: [id])
+  sesja           Sesja                     @relation(fields: [sesja_id], references: [id])
   typ             transakcje_typ
-  kwota           Decimal        @db.Decimal(10, 2)
-  opis            String?        @db.VarChar(255)
-  data_utworzenia DateTime       @default(now()) @db.DateTime(0)
+  kwota           Decimal                   @db.Decimal(10, 2)
+  forma_platnosci transakcje_forma_platnosci? @default(manualny)
+  opis            String?                   @db.VarChar(255)
+  data_utworzenia DateTime                  @default(now()) @db.DateTime(0)
 
   @@index([sesja_id], map: "sesja_id")
   @@map("transakcje")
@@ -138,6 +139,12 @@ model Transakcja {
 enum transakcje_typ {
   wplyw
   wydatek
+}
+
+enum transakcje_forma_platnosci {
+  gotowka
+  karta
+  manualny
 }
 
 enum sesje_status {

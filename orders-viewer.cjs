@@ -88,6 +88,89 @@ const server = http.createServer(async (req, res) => {
           database: 'SmartPizzApp13'
         });
         
+        // Pobierz aktualne dane zamówienia przed zmianami
+        const [currentOrder] = await connection.execute(
+          'SELECT sesja_id, platnosc, cena_calkowita, adres FROM zamowienia WHERE id = ?',
+          [orderId]
+        );
+        
+        if (currentOrder.length > 0) {
+          const staraSesjaId = currentOrder[0].sesja_id;
+          const staraPlatnosc = currentOrder[0].platnosc;
+          const kwotaZamowienia = currentOrder[0].cena_calkowita;
+          const adresZamowienia = currentOrder[0].adres;
+          
+          // === SPRAWDZANIE ZMIANY KIEROWCY ===
+          if (sesjaId !== null) {
+            const nowaSesjaId = sesjaId === -1 ? null : sesjaId;
+            
+            // Jeśli sesja się zmienia
+            if (staraSesjaId !== nowaSesjaId) {
+              // Usuń transakcję ze starej sesji (jeśli była)
+              if (staraSesjaId) {
+                await connection.execute(
+                  `DELETE FROM transakcje 
+                   WHERE sesja_id = ? 
+                   AND typ = 'wplyw' 
+                   AND kwota = ? 
+                   AND opis LIKE ?
+                   ORDER BY data_utworzenia DESC 
+                   LIMIT 1`,
+                  [staraSesjaId, kwotaZamowienia, `%${adresZamowienia}%`]
+                );
+                console.log(`Usunięto transakcję ze starej sesji ${staraSesjaId}`);
+              }
+              
+              // Dodaj transakcję do nowej sesji (jeśli jest)
+              if (nowaSesjaId) {
+                await connection.execute(
+                  'INSERT INTO transakcje (sesja_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?)',
+                  [nowaSesjaId, 'wplyw', kwotaZamowienia, staraPlatnosc, `Zamówienie - ${adresZamowienia}`]
+                );
+                console.log(`Dodano transakcję do nowej sesji ${nowaSesjaId} (${staraPlatnosc})`);
+              }
+            }
+          }
+          
+          // === SPRAWDZANIE ZMIANY TYPU PŁATNOŚCI ===
+          if (platnosc && platnosc !== staraPlatnosc) {
+            const aktualnaSesjaId = sesjaId !== null ? (sesjaId === -1 ? null : sesjaId) : staraSesjaId;
+            
+            // Jeśli jest przypisana sesja
+            if (aktualnaSesjaId) {
+              // Znajdź ID transakcji do aktualizacji
+              const [transakcjeDoZmiany] = await connection.execute(
+                `SELECT id FROM transakcje
+                 WHERE sesja_id = ? 
+                 AND typ = 'wplyw' 
+                 AND kwota = ? 
+                 AND opis LIKE ?
+                 ORDER BY data_utworzenia DESC 
+                 LIMIT 1`,
+                [aktualnaSesjaId, kwotaZamowienia, `%${adresZamowienia}%`]
+              );
+              
+              if (transakcjeDoZmiany.length > 0) {
+                // Zaktualizuj formę płatności w istniejącej transakcji
+                await connection.execute(
+                  `UPDATE transakcje 
+                   SET forma_platnosci = ?
+                   WHERE id = ?`,
+                  [platnosc, transakcjeDoZmiany[0].id]
+                );
+                console.log(`Zaktualizowano formę płatności na ${platnosc} dla transakcji ID ${transakcjeDoZmiany[0].id}`);
+              } else {
+                console.log(`Nie znaleziono transakcji do aktualizacji, tworzę nową`);
+                // Jeśli nie znaleziono transakcji do aktualizacji, dodaj nową
+                await connection.execute(
+                  'INSERT INTO transakcje (sesja_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?)',
+                  [aktualnaSesjaId, 'wplyw', kwotaZamowienia, platnosc, `Zamówienie - ${adresZamowienia}`]
+                );
+              }
+            }
+          }
+        }
+        
         // Buduj zapytanie dynamicznie
         let updateFields = [];
         let updateValues = [];
@@ -289,12 +372,17 @@ const server = http.createServer(async (req, res) => {
       // Dla każdej sesji policz saldo
       for (let sesja of sesje) {
         const [transakcje] = await connection.execute(
-          'SELECT typ, kwota FROM transakcje WHERE sesja_id = ?',
+          'SELECT typ, kwota, forma_platnosci FROM transakcje WHERE sesja_id = ?',
           [sesja.id]
         );
         
         let saldo = 0;
         for (let t of transakcje) {
+          // Transakcje kartą nie wliczają się do salda
+          if (t.forma_platnosci === 'karta') {
+            continue;
+          }
+          
           if (t.typ === 'wplyw') {
             saldo += parseFloat(t.kwota);
           } else {
@@ -395,12 +483,17 @@ const server = http.createServer(async (req, res) => {
         
         // Oblicz saldo końcowe
         const [transakcje] = await connection.execute(
-          'SELECT typ, kwota FROM transakcje WHERE sesja_id = ?',
+          'SELECT typ, kwota, forma_platnosci FROM transakcje WHERE sesja_id = ?',
           [sesjaId]
         );
         
         let saldo = 0;
         for (let t of transakcje) {
+          // Transakcje kartą nie wliczają się do salda
+          if (t.forma_platnosci === 'karta') {
+            continue;
+          }
+          
           if (t.typ === 'wplyw') {
             saldo += parseFloat(t.kwota);
           } else {
@@ -456,8 +549,8 @@ const server = http.createServer(async (req, res) => {
         });
         
         const [result] = await connection.execute(
-          'INSERT INTO transakcje (sesja_id, typ, kwota, opis) VALUES (?, ?, ?, ?)',
-          [sesja_id, typ, kwota, opis || null]
+          'INSERT INTO transakcje (sesja_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?)',
+          [sesja_id, typ, kwota, 'manualny', opis || null]
         );
         
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });

@@ -1,44 +1,44 @@
-id_skladnik;nazwa;cena_srednia;cena_duza
-1;'sos';0;0
-2;'ser';0;0
-3;'zio≥a';0;0
-4;'pieczarki';3;4
-5;'cebula';1;2
-6;'papryka';3;4
-7;'pieprz';1;2
-8;'szynka';4;6
-9;'tuÒczyk';4;6
-10;'majonez';2;2
-11;'oliwki';3;4
-12;'salami';4;6
-13;'ananas';3;4
-14;'brzoskwinie';3;4
-15;'boczek';4;6
-16;'groszek';3;4
-17;'pomidor';3;4
-18;'krewetki';4;6
-19;'czosnek';1;2
-20;'kukurydza';3;4
-21;'kapary';3;4
-22;'tabasco';1;2
-23;'kie≥basa';4;6
-24;'szparagi';3;4
-25;'szpinak';3;4
-26;'broku≥y';3;4
-27;'curry';1;2
-28;'bazylia';3;4
-29;'kabanosy';4;6
-30;'jalapeno';3;4
-31;'fasola';3;4
-32;'kurczak';3;6
-33;'ma≥øe';4;6
-34;'chili';1;2
-35;'kebab';4,5;5,5
-36;'serek gÛrski';5;8
-37;'ogÛrek konserwowy';3;4
-38;'szczypiorek';3;4
-39;'oregano';1;2
-40;'pomidorki koktajlowe';3;4
-41;'szynka d≥ugodojrzewajπca';4;6
-42;'ser grana padano';4;8
-43;'rukola';3;4
+id,nazwa,cena_srednia,cena_duza
+"1","sos","2","2"
+"2","ser","4","6"
+"3","zio≈Ça","0","0"
+"4","pieczarki","3","4"
+"5","cebula","1","2"
+"6","papryka","3","4"
+"7","pieprz","1","2"
+"8","szynka","4","6"
+"9","tu≈Ñczyk","4","6"
+"10","majonez","2","2"
+"11","oliwki","3","4"
+"12","salami","4","6"
+"13","ananas","3","4"
+"14","brzoskwinie","3","4"
+"15","boczek","4","6"
+"16","groszek","3","4"
+"17","pomidor","3","4"
+"18","krewetki","4","6"
+"19","czosnek","1","2"
+"20","kukurydza","3","4"
+"21","kapary","3","4"
+"22","tabasco","1","2"
+"23","kie≈Çbasa","4","6"
+"24","szparagi","3","4"
+"25","szpinak","3","4"
+"26","broku≈Çy","3","4"
+"27","curry","1","2"
+"28","bazylia","3","4"
+"29","kabanosy","4","6"
+"30","jalapeno","3","4"
+"31","fasola","3","4"
+"32","kurczak","3","6"
+"33","ma≈Ç≈ºe","4","6"
+"34","chili","1","2"
+"35","kebab","4.5","5.5"
+"36","serek g√≥rski","5","8"
+"37","og√≥rek konserwowy","3","4"
+"38","szczypiorek","3","4"
+"39","oregano","1","2"
+"40","pomidorki koktajlowe","3","4"
+"41","szynka d≈ÇugodojrzewajƒÖca","4","6"
+"42","ser grana padano","4","8"
+"43","rukola","3","4"

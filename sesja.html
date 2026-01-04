@@ -340,7 +340,12 @@
       
       <!-- Prawa kolumna: Aktywne sesje -->
       <div class="card">
-        <h2>🟢 Aktywne sesje</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h2 style="margin-bottom: 0;">🟢 Aktywne sesje</h2>
+          <button onclick="odswiezSesje()" class="btn" style="background: #10b981; padding: 8px 16px;">
+            🔄 Odśwież
+          </button>
+        </div>
         <div id="aktywneSesje">
           <p style="color: #9ca3af; text-align: center; padding: 40px 0;">Brak aktywnych sesji</p>
         </div>
@@ -508,7 +513,7 @@
           const ostatnie = transakcje.slice(-5).reverse();
           
           let html = '<h4 style="color: #374151; margin-bottom: 12px; font-size: 0.9em;">📋 Ostatnie transakcje:</h4>';
-          html += '<table style="font-size: 0.85em;"><thead><tr><th>Data</th><th>Typ</th><th>Kwota</th><th>Opis</th></tr></thead><tbody>';
+          html += '<table style="font-size: 0.85em;"><thead><tr><th>Data</th><th>Typ</th><th>Kwota</th><th>Forma</th><th>Opis</th></tr></thead><tbody>';
           
           ostatnie.forEach(t => {
             const data = new Date(t.data_utworzenia).toLocaleString('pl-PL', {
@@ -518,14 +523,36 @@
               minute: '2-digit'
             });
             const kwota = parseFloat(t.kwota).toFixed(2);
-            const typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
-            const className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
+            // Poprawka: sprawdzaj dokładnie wartość forma_platnosci
+            const formaPlatnosci = t.forma_platnosci ? t.forma_platnosci.toLowerCase() : 'manualny';
+            let typ = '';
+            let className = '';
+            
+            // Transakcje z kartą - czarna czcionka, nie wlicza się do salda
+            if (formaPlatnosci === 'karta') {
+              typ = t.typ === 'wplyw' ? 'Wpływ (karta)' : 'Wydatek (karta)';
+              className = '';
+            }
+            // Transakcje z gotówką - zielona czcionka, wlicza się do salda
+            else if (formaPlatnosci === 'gotowka') {
+              typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
+              className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
+            }
+            // Transakcje manualne - standardowe kolory
+            else {
+              typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
+              className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
+            }
+            
+            const formaLabel = formaPlatnosci === 'gotowka' ? '💵 Gotówka' : 
+                              formaPlatnosci === 'karta' ? '💳 Karta' : '✏️ Manualny';
             
             html += `
               <tr>
                 <td>${data}</td>
                 <td class="${className}">${typ}</td>
                 <td class="${className}">${kwota} PLN</td>
+                <td>${formaLabel}</td>
                 <td>${t.opis || '-'}</td>
               </tr>
             `;
@@ -562,19 +589,41 @@
         if (transakcje.length === 0) {
           container.innerHTML = '<p style="text-align: center; color: #9ca3af;">Brak transakcji</p>';
         } else {
-          let html = '<table><thead><tr><th>Data</th><th>Typ</th><th>Kwota</th><th>Opis</th></tr></thead><tbody>';
+          let html = '<table><thead><tr><th>Data</th><th>Typ</th><th>Kwota</th><th>Forma</th><th>Opis</th></tr></thead><tbody>';
           
           transakcje.forEach(t => {
             const data = new Date(t.data_utworzenia).toLocaleString('pl-PL');
             const kwota = parseFloat(t.kwota).toFixed(2);
-            const typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
-            const className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
+            // Poprawka: sprawdzaj dokładnie wartość forma_platnosci
+            const formaPlatnosci = t.forma_platnosci ? t.forma_platnosci.toLowerCase() : 'manualny';
+            let typ = '';
+            let className = '';
+            
+            // Transakcje z kartą - czarna czcionka, nie wlicza się do salda
+            if (formaPlatnosci === 'karta') {
+              typ = t.typ === 'wplyw' ? 'Wpływ (karta)' : 'Wydatek (karta)';
+              className = '';
+            }
+            // Transakcje z gotówką - zielona czcionka, wlicza się do salda
+            else if (formaPlatnosci === 'gotowka') {
+              typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
+              className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
+            }
+            // Transakcje manualne - standardowe kolory
+            else {
+              typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
+              className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
+            }
+            
+            const formaLabel = formaPlatnosci === 'gotowka' ? '💵 Gotówka' : 
+                              formaPlatnosci === 'karta' ? '💳 Karta' : '✏️ Manualny';
             
             html += `
               <tr>
                 <td>${data}</td>
                 <td class="${className}">${typ}</td>
                 <td class="${className}">${kwota} PLN</td>
+                <td>${formaLabel}</td>
                 <td>${t.opis || '-'}</td>
               </tr>
             `;
@@ -710,9 +759,94 @@
         alert('Błąd: ' + error.message);
       }
     }
+
+    async function odswiezSesje() {
+      const button = event.target;
+      const originalText = button.innerHTML;
+      button.innerHTML = '⏳ Odświeżanie...';
+      button.disabled = true;
+      
+      try {
+        // Zapisz poprzednie saldo każdej sesji
+        const poprzednieSalda = {};
+        aktywneSesje.forEach(s => {
+          poprzednieSalda[s.id] = parseFloat(s.saldo_aktualne || 0);
+        });
+        
+        // Odśwież dane sesji (pobierze aktualne salda z bazy)
+        await zaladujAktywneSesje();
+        
+        // Sprawdź czy są zmiany w saldach
+        let wykrytoZmiany = false;
+        aktywneSesje.forEach(s => {
+          const poprzednieSaldo = poprzednieSalda[s.id];
+          const aktualneSaldo = parseFloat(s.saldo_aktualne || 0);
+          if (poprzednieSaldo !== undefined && Math.abs(poprzednieSaldo - aktualneSaldo) > 0.01) {
+            wykrytoZmiany = true;
+          }
+        });
+        
+        // Pokaż powiadomienie
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: ${wykrytoZmiany ? '#10b981' : '#3b82f6'};
+          color: white;
+          padding: 16px 24px;
+          border-radius: 8px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          z-index: 1000;
+          animation: slideIn 0.3s ease-out;
+        `;
+        notification.innerHTML = wykrytoZmiany 
+          ? '✅ Sesje zaktualizowane - wykryto zmiany w saldach' 
+          : '✅ Sesje zaktualizowane';
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+          notification.style.animation = 'slideOut 0.3s ease-in';
+          setTimeout(() => notification.remove(), 300);
+        }, 3000);
+        
+        button.innerHTML = originalText;
+        button.disabled = false;
+      } catch (error) {
+        button.innerHTML = originalText;
+        button.disabled = false;
+        alert('Błąd podczas odświeżania: ' + error.message);
+      }
+    }
     
     // Inicjalizacja
     init();
+  </script>
+
+  <style>
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+  </style>
+
   </script>
 </body>
 </html>

@@ -44,13 +44,31 @@ export const pizzaRouter = createTRPCRouter({
         status: 'otwarta'
       },
       include: {
-        kierowca: true
+        kierowca: true,
+        transakcje: {
+          orderBy: {
+            data_utworzenia: 'desc'
+          }
+        }
       },
       orderBy: {
         data_otwarcia: 'desc'
       }
     });
-    return sesje;
+    
+    // Przelicz aktualne saldo z transakcji
+    const sesjeZSaldem = sesje.map(sesja => {
+      const saldo = sesja.transakcje.reduce((sum, t) => {
+        return sum + (t.typ === 'wplyw' ? Number(t.kwota) : -Number(t.kwota));
+      }, 0);
+      
+      return {
+        ...sesja,
+        saldo_aktualne: saldo
+      };
+    });
+    
+    return sesjeZSaldem;
   }),
 
   // Wyszukuje ulice na podstawie fragmentu nazwy
@@ -267,27 +285,33 @@ export const pizzaRouter = createTRPCRouter({
           }
           
           // Jeśli to pizza pół na pół
-          if (pizza.polNaPol && !kuponEligible) {
-            const drugaPizzaData = await db.pizza.findUnique({
-              where: { id: pizza.polNaPol.id },
-            });
-            
-            if (drugaPizzaData) {
-              let drugaCena = 0;
-              switch (pizza.rozmiar) {
-                case "mala":
-                  drugaCena = drugaPizzaData.cena_mala;
-                  break;
-                case "srednia":
-                  drugaCena = drugaPizzaData.cena_srednia;
-                  break;
-                case "duza":
-                  drugaCena = drugaPizzaData.cena_duza;
-                  break;
-              }
+          if (pizza.polNaPol) {
+            if (kuponEligible) {
+              // Dla pizzy z kuponów: po prostu dodaj +4 PLN
+              pizzaPrice += 4;
+            } else {
+              // Dla pizzy normalnej: wyższa cena z dwóch pizz + 4 PLN
+              const drugaPizzaData = await db.pizza.findUnique({
+                where: { id: pizza.polNaPol.id },
+              });
               
-              // Cena pół na pół: wyższa cena + dopłata 4 PLN
-              pizzaPrice = Math.max(pizzaPrice, drugaCena) + 4;
+              if (drugaPizzaData) {
+                let drugaCena = 0;
+                switch (pizza.rozmiar) {
+                  case "mala":
+                    drugaCena = drugaPizzaData.cena_mala;
+                    break;
+                  case "srednia":
+                    drugaCena = drugaPizzaData.cena_srednia;
+                    break;
+                  case "duza":
+                    drugaCena = drugaPizzaData.cena_duza;
+                    break;
+                }
+                
+                // Cena pół na pół: wyższa cena + dopłata 4 PLN
+                pizzaPrice = Math.max(pizzaPrice, drugaCena) + 4;
+              }
             }
           }
           
@@ -487,28 +511,34 @@ export const pizzaRouter = createTRPCRouter({
               }
             }
             
-            // Jeśli to pizza pół na pół (wyłączone dla kuponów)
-            if (pizza.polNaPol && !kuponEligible) {
-              const drugaPizzaData = await tx.pizza.findUnique({
-                where: { id: pizza.polNaPol.id },
-              });
-              
-              if (drugaPizzaData) {
-                let drugaCena = 0;
-                switch (pizza.rozmiar) {
-                  case "mala":
-                    drugaCena = drugaPizzaData.cena_mala;
-                    break;
-                  case "srednia":
-                    drugaCena = drugaPizzaData.cena_srednia;
-                    break;
-                  case "duza":
-                    drugaCena = drugaPizzaData.cena_duza;
-                    break;
-                }
+            // Jeśli to pizza pół na pół
+            if (pizza.polNaPol) {
+              if (kuponEligible) {
+                // Dla pizzy z kuponów: po prostu dodaj +4 PLN
+                pizzaPrice += 4;
+              } else {
+                // Dla pizzy normalnej: wyższa cena z dwóch pizz + 4 PLN
+                const drugaPizzaData = await tx.pizza.findUnique({
+                  where: { id: pizza.polNaPol.id },
+                });
                 
-                // Cena pół na pół: wyższa cena + dopłata 4 PLN
-                pizzaPrice = Math.max(pizzaPrice, drugaCena) + 4;
+                if (drugaPizzaData) {
+                  let drugaCena = 0;
+                  switch (pizza.rozmiar) {
+                    case "mala":
+                      drugaCena = drugaPizzaData.cena_mala;
+                      break;
+                    case "srednia":
+                      drugaCena = drugaPizzaData.cena_srednia;
+                      break;
+                    case "duza":
+                      drugaCena = drugaPizzaData.cena_duza;
+                      break;
+                  }
+                  
+                  // Cena pół na pół: wyższa cena + dopłata 4 PLN
+                  pizzaPrice = Math.max(pizzaPrice, drugaCena) + 4;
+                }
               }
             }
             
@@ -628,17 +658,18 @@ export const pizzaRouter = createTRPCRouter({
       
       console.log("Zamówienie zapisane pomyślnie:", insertResult);
       
-      // Jeśli płatność gotówką, przypisano do sesji i typ to dowóz, dodaj wpływ
-      if (input.platnosc === 'gotowka' && input.sesjaId && input.typZamowienia === 'dowoz') {
-        console.log(`Dodaję wpływ ${priceResult} PLN do sesji ${input.sesjaId}`);
+      // Jeśli przypisano do sesji i typ to dowóz, dodaj transakcję
+      if (input.sesjaId && input.typZamowienia === 'dowoz') {
+        console.log(`Dodaję transakcję ${priceResult} PLN do sesji ${input.sesjaId} (${input.platnosc})`);
         try {
+          // Dla gotówki - wpływ, dla karty - wpływ ale nie wliczane do salda (forma_platnosci = karta)
           await db.$executeRaw`
-            INSERT INTO transakcje (sesja_id, typ, kwota, opis)
-            VALUES (${input.sesjaId}, 'wplyw', ${priceResult}, ${`Zamówienie - ${input.adres}`})
+            INSERT INTO transakcje (sesja_id, typ, kwota, forma_platnosci, opis)
+            VALUES (${input.sesjaId}, 'wplyw', ${priceResult}, ${input.platnosc}, ${`Zamówienie - ${input.adres}`})
           `;
-          console.log("Wpływ dodany pomyślnie");
+          console.log("Transakcja dodana pomyślnie");
         } catch (error) {
-          console.error("Błąd dodawania wpływu:", error);
+          console.error("Błąd dodawania transakcji:", error);
         }
       }
 
@@ -647,5 +678,28 @@ export const pizzaRouter = createTRPCRouter({
         zamowienieId: Date.now(), // Używamy timestamp jako ID
         cenaCalkwita: priceResult,
       };
+    }),
+
+  // Pobiera ostatnie zamówienia
+  getRecentOrders: publicProcedure
+    .input(z.object({
+      limit: z.number().min(1).max(100).default(20)
+    }))
+    .query(async ({ input }) => {
+      const zamowienia = await db.zamowienie.findMany({
+        take: input.limit,
+        orderBy: {
+          created_at: 'desc'
+        },
+        include: {
+          sesja: {
+            include: {
+              kierowca: true
+            }
+          }
+        }
+      });
+      
+      return zamowienia;
     }),
 });
