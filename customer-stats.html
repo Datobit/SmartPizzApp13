@@ -128,7 +128,7 @@
     
     .charts-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      grid-template-columns: 1fr;
       gap: 30px;
       margin-bottom: 30px;
     }
@@ -138,6 +138,10 @@
       padding: 25px;
       border-radius: 12px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .chart-container canvas {
+      max-height: 340px;
     }
     
     .chart-title {
@@ -153,21 +157,33 @@
       border-collapse: collapse;
       background: white;
       border-radius: 12px;
-      overflow: hidden;
+      overflow-x: auto;
       box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      display: block;
+    }
+    
+    .history-table thead,
+    .history-table tbody,
+    .history-table tr {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
     }
     
     .history-table th {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 15px;
+      padding: 15px 10px;
       text-align: left;
       font-weight: 600;
+      font-size: 0.85em;
     }
     
     .history-table td {
-      padding: 12px 15px;
+      padding: 12px 10px;
       border-bottom: 1px solid #eee;
+      font-size: 0.85em;
+      word-wrap: break-word;
     }
     
     .history-table tr:hover {
@@ -191,6 +207,91 @@
       font-size: 1.5em;
       color: #667eea;
     }
+    
+    /* Klawiatura ekranowa */
+    .keyboard-container {
+      background: #1f2937;
+      padding: 16px;
+      border-radius: 12px;
+      margin-top: 20px;
+    }
+    
+    .keyboard-row {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    
+    .keyboard-row.row-numbers {
+      grid-template-columns: repeat(10, 1fr);
+    }
+    
+    .keyboard-row.row-qwerty {
+      grid-template-columns: repeat(10, 1fr);
+    }
+    
+    .keyboard-row.row-asdf {
+      grid-template-columns: repeat(9, 1fr);
+    }
+    
+    .keyboard-row.row-zxcv {
+      grid-template-columns: 0.8fr repeat(7, 1fr) 1.2fr;
+    }
+    
+    .keyboard-row.row-bottom {
+      grid-template-columns: 1.5fr 0.8fr 0.6fr 3fr 0.6fr 1.5fr;
+    }
+    
+    .keyboard-row.row-polish {
+      grid-template-columns: repeat(9, 1fr);
+    }
+    
+    .key {
+      background: #4b5563;
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    .key:hover {
+      background: #6b7280;
+    }
+    
+    .key:active {
+      background: #9ca3af;
+      transform: scale(0.95);
+    }
+    
+    .key.special {
+      background: #374151;
+      font-size: 14px;
+    }
+    
+    .key.shift.active,
+    .key.pl.active {
+      background: #0d9488;
+    }
+    
+    .key.enter {
+      background: #14b8a6;
+    }
+    
+    .key.enter:hover {
+      background: #0d9488;
+    }
+    
+    .key.polish-row {
+      background: #0f766e;
+    }
+    
+    .key.polish-row:hover {
+      background: #0d9488;
+    }
   </style>
 </head>
 <body>
@@ -205,8 +306,14 @@
         id="searchInput" 
         class="search-input" 
         placeholder="Wpisz numer telefonu lub adres (np. 123456789 lub Rondo)..."
+        onfocus="setActiveInput(this)"
       >
       <button class="search-btn" onclick="searchStats()">🔍 Szukaj statystyk</button>
+      
+      <!-- Klawiatura ekranowa -->
+      <div class="keyboard-container" id="keyboard">
+        <!-- Będzie generowana przez JS -->
+      </div>
     </div>
     
     <div id="loadingDiv" class="loading hidden">
@@ -236,7 +343,7 @@
       </div>
       
       <!-- Wykresy - rząd 1: Pizze i Kupony -->
-      <div class="charts-grid" style="grid-template-columns: repeat(2, 1fr);">
+      <div class="charts-grid">
         <div class="chart-container">
           <h3 class="chart-title">🍕 Najczęściej zamawiane pizze</h3>
           <canvas id="pizzaChart"></canvas>
@@ -249,7 +356,7 @@
       </div>
       
       <!-- Wykresy - rząd 2: Dni tygodnia i Pory dnia -->
-      <div class="charts-grid" style="grid-template-columns: repeat(2, 1fr);">
+      <div class="charts-grid">
         <div class="chart-container">
           <h3 class="chart-title">📅 Zamówienia wg dni tygodnia</h3>
           <canvas id="weekdayChart"></canvas>
@@ -537,6 +644,206 @@
     document.getElementById('searchInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') searchStats();
     });
+    
+    // ========== KLAWIATURA EKRANOWA ==========
+    let activeInput = null;
+    let capsLock = false;
+    let showPolishChars = false;
+    let keyboardType = 'text'; // 'text' lub 'numeric'
+    
+    function setActiveInput(input) {
+      activeInput = input;
+      input.focus();
+    }
+    
+    function insertText(text) {
+      if (!activeInput) return;
+      
+      activeInput.focus();
+      
+      const start = activeInput.selectionStart ?? activeInput.value.length;
+      const end = activeInput.selectionEnd ?? activeInput.value.length;
+      const currentValue = activeInput.value;
+      const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
+      
+      activeInput.value = newValue;
+      activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      
+      const newPos = start + text.length;
+      activeInput.setSelectionRange(newPos, newPos);
+      activeInput.focus();
+    }
+    
+    function deleteChar() {
+      if (!activeInput) return;
+      
+      activeInput.focus();
+      
+      const start = activeInput.selectionStart ?? activeInput.value.length;
+      const end = activeInput.selectionEnd ?? activeInput.value.length;
+      const currentValue = activeInput.value;
+      
+      if (start === end && start > 0) {
+        const newValue = currentValue.substring(0, start - 1) + currentValue.substring(start);
+        activeInput.value = newValue;
+        activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        activeInput.setSelectionRange(start - 1, start - 1);
+        activeInput.focus();
+      } else if (start !== end) {
+        const newValue = currentValue.substring(0, start) + currentValue.substring(end);
+        activeInput.value = newValue;
+        activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        activeInput.setSelectionRange(start, start);
+        activeInput.focus();
+      }
+    }
+    
+    function generateKeyboard() {
+      const container = document.getElementById('keyboard');
+      if (!container) return;
+      
+      container.innerHTML = `
+        <div id="keyboard_text" class="keyboard-text">
+          <!-- Rząd 1: Cyfry -->
+          <div class="keyboard-row row-numbers">
+            ${['1','2','3','4','5','6','7','8','9','0'].map(k => 
+              `<button class="key" onclick="insertText('${k}')">${k}</button>`
+            ).join('')}
+          </div>
+          
+          <!-- Rząd polskich znaków (ukryty domyślnie) -->
+          <div id="polish_row" class="keyboard-row row-polish" style="display: none; background: #0f766e; padding: 8px; border-radius: 6px; margin-bottom: 6px;">
+            ${['Ą','Ć','Ę','Ł','Ń','Ó','Ś','Ź','Ż'].map(k => 
+              `<button class="key polish-row" onclick="insertText(capsLock ? '${k}' : '${k.toLowerCase()}')">${k}</button>`
+            ).join('')}
+          </div>
+          
+          <!-- Rząd 2: QWERTYUIOP -->
+          <div class="keyboard-row row-qwerty">
+            ${['Q','W','E','R','T','Y','U','I','O','P'].map(k => 
+              `<button class="key" onclick="insertText(capsLock ? '${k}' : '${k.toLowerCase()}')">${k}</button>`
+            ).join('')}
+          </div>
+          
+          <!-- Rząd 3: ASDFGHJKL -->
+          <div class="keyboard-row row-asdf">
+            ${['A','S','D','F','G','H','J','K','L'].map(k => 
+              `<button class="key" onclick="insertText(capsLock ? '${k}' : '${k.toLowerCase()}')">${k}</button>`
+            ).join('')}
+          </div>
+          
+          <!-- Rząd 4: Shift, ZXCVBNM, Backspace -->
+          <div class="keyboard-row row-zxcv">
+            <button class="key special shift" id="shift_btn" onclick="toggleCapsLock()">⬆</button>
+            ${['Z','X','C','V','B','N','M'].map(k => 
+              `<button class="key" onclick="insertText(capsLock ? '${k}' : '${k.toLowerCase()}')">${k}</button>`
+            ).join('')}
+            <button class="key special" onclick="deleteChar()">✕</button>
+          </div>
+          
+          <!-- Rząd 5: 123, PL, przecinek, spacja, kropka, enter -->
+          <div class="keyboard-row row-bottom">
+            <button class="key special" onclick="switchToNumeric()">123</button>
+            <button class="key special pl" id="pl_btn" onclick="togglePolish()">PL</button>
+            <button class="key" onclick="insertText('/')">/</button>
+            <button class="key" onclick="insertText(' ')"></button>
+            <button class="key" onclick="insertText('.')">.</button>
+            <button class="key special enter" onclick="if(activeInput)activeInput.blur()">↵</button>
+          </div>
+        </div>
+        
+        <div id="keyboard_numeric" class="keyboard-numeric" style="display: none;">
+          <!-- Rząd 1: 7 8 9 -->
+          <div class="keyboard-row" style="grid-template-columns: repeat(3, 1fr);">
+            <button class="key" onclick="insertText('7')">7</button>
+            <button class="key" onclick="insertText('8')">8</button>
+            <button class="key" onclick="insertText('9')">9</button>
+          </div>
+          
+          <!-- Rząd 2: 4 5 6 -->
+          <div class="keyboard-row" style="grid-template-columns: repeat(3, 1fr);">
+            <button class="key" onclick="insertText('4')">4</button>
+            <button class="key" onclick="insertText('5')">5</button>
+            <button class="key" onclick="insertText('6')">6</button>
+          </div>
+          
+          <!-- Rząd 3: 1 2 3 -->
+          <div class="keyboard-row" style="grid-template-columns: repeat(3, 1fr);">
+            <button class="key" onclick="insertText('1')">1</button>
+            <button class="key" onclick="insertText('2')">2</button>
+            <button class="key" onclick="insertText('3')">3</button>
+          </div>
+          
+          <!-- Rząd 4: . 0 DEL -->
+          <div class="keyboard-row" style="grid-template-columns: repeat(3, 1fr);">
+            <button class="key" onclick="insertText('.')">.</button>
+            <button class="key" onclick="insertText('0')">0</button>
+            <button class="key special" onclick="deleteChar()" style="background: #ef4444;">DEL</button>
+          </div>
+          
+          <!-- Rząd 5: ABC, Enter -->
+          <div class="keyboard-row" style="grid-template-columns: 2fr 1fr;">
+            <button class="key special" onclick="switchToText()">ABC</button>
+            <button class="key special enter" onclick="if(activeInput)activeInput.blur()">↵</button>
+          </div>
+        </div>
+      `;
+    }
+    
+    function toggleCapsLock() {
+      capsLock = !capsLock;
+      const btn = document.getElementById('shift_btn');
+      if (btn) {
+        btn.classList.toggle('active', capsLock);
+      }
+      updatePolishKeys();
+    }
+    
+    function togglePolish() {
+      showPolishChars = !showPolishChars;
+      const polishRow = document.getElementById('polish_row');
+      const plBtn = document.getElementById('pl_btn');
+      
+      if (polishRow) {
+        polishRow.style.display = showPolishChars ? 'grid' : 'none';
+      }
+      if (plBtn) {
+        plBtn.classList.toggle('active', showPolishChars);
+      }
+    }
+    
+    function updatePolishKeys() {
+      const polishRow = document.getElementById('polish_row');
+      if (!polishRow) return;
+      
+      const buttons = polishRow.querySelectorAll('button');
+      const chars = ['Ą','Ć','Ę','Ł','Ń','Ó','Ś','Ź','Ż'];
+      
+      buttons.forEach((btn, idx) => {
+        const char = chars[idx];
+        btn.textContent = capsLock ? char : char.toLowerCase();
+        btn.onclick = () => insertText(capsLock ? char : char.toLowerCase());
+      });
+    }
+    
+    function switchToNumeric() {
+      const textKeyboard = document.getElementById('keyboard_text');
+      const numericKeyboard = document.getElementById('keyboard_numeric');
+      
+      if (textKeyboard) textKeyboard.style.display = 'none';
+      if (numericKeyboard) numericKeyboard.style.display = 'block';
+    }
+    
+    function switchToText() {
+      const textKeyboard = document.getElementById('keyboard_text');
+      const numericKeyboard = document.getElementById('keyboard_numeric');
+      
+      if (textKeyboard) textKeyboard.style.display = 'block';
+      if (numericKeyboard) numericKeyboard.style.display = 'none';
+    }
+    
+    // Inicjalizacja klawiatury
+    generateKeyboard();
   </script>
 </body>
 </html>

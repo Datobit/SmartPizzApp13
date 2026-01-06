@@ -713,10 +713,25 @@ const server = http.createServer(async (req, res) => {
     };
     
     // Helper function do formatowania nazwy napoju
-    const formatNapojInfo = (napojId) => {
-      if (!napojId) return '-';
-      const napojData = napoje.find(n => n.id == napojId);
-      return napojData ? napojData.nazwa : `Napój ID:${napojId}`;
+    const formatNapojInfo = (napojJson) => {
+      if (!napojJson) return '-';
+      try {
+        // Sprawdź czy to JSON z tablicą ID
+        const napojIds = JSON.parse(napojJson);
+        if (Array.isArray(napojIds)) {
+          if (napojIds.length === 0) return '-';
+          return napojIds.map(id => {
+            const napojData = napoje.find(n => n.id == id);
+            return napojData ? napojData.nazwa : `ID:${id}`;
+          }).join('<br>');
+        }
+        // Jeśli to pojedyncze ID (stary format)
+        const napojData = napoje.find(n => n.id == napojIds);
+        return napojData ? napojData.nazwa : `Napój ID:${napojIds}`;
+      } catch (e) {
+        // Jeśli nie jest JSON, zwróć jako tekst
+        return napojJson;
+      }
     };
     
     // Helper function do formatowania czasu
@@ -741,6 +756,24 @@ const server = http.createServer(async (req, res) => {
         default: return typ;
       }
     };
+    
+    // Helper function do formatowania sosów
+    const formatSosyInfo = (sosyJson) => {
+      if (!sosyJson) return '-';
+      try {
+        const sosy = JSON.parse(sosyJson);
+        const lines = [];
+        // Obsługa nowego formatu (pom, czos)
+        if (sosy.pom !== undefined) lines.push(`pom: ${sosy.pom}`);
+        if (sosy.czos !== undefined) lines.push(`czos: ${sosy.czos}`);
+        // Obsługa starego formatu (pomidorowy, czosnkowy) - dla kompatybilności wstecznej
+        if (sosy.pomidorowy !== undefined) lines.push(`pom: ${sosy.pomidorowy}`);
+        if (sosy.czosnkowy !== undefined) lines.push(`czos: ${sosy.czosnkowy}`);
+        return lines.length > 0 ? lines.join('<br>') : '-';
+      } catch (e) {
+        return sosyJson;
+      }
+    };
 
     const html = `
 <!DOCTYPE html>
@@ -748,125 +781,223 @@ const server = http.createServer(async (req, res) => {
 <head>
   <meta charset="utf-8">
   <title>Zamówienia Pizza</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background-color: #f2f2f2; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body { 
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f3f4f6;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    table { 
+      border-collapse: collapse; 
+      width: 100%; 
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+      border-radius: 20px;
+      overflow: hidden;
+      table-layout: fixed;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    th, td { 
+      border: 1px solid #e5e7eb; 
+      padding: 12px 14px; 
+      text-align: left; 
+      font-size: 13px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    th { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td {
+      color: #1f2937;
+    }
+    tr:hover {
+      background-color: #f9fafb;
+      transition: background-color 0.2s ease;
+    }
     .refresh-btn { 
-      background: #007bff; 
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
       color: white; 
-      padding: 10px 20px; 
+      padding: 10px 18px; 
       border: none; 
-      border-radius: 5px; 
-      cursor: pointer; 
-      margin-bottom: 20px;
+      border-radius: 12px; 
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .refresh-btn:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.5);
     }
     .filters-container {
-      background: #f8f9fa;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 16px;
+      border-radius: 16px;
+      margin-bottom: 16px;
       display: flex;
-      gap: 15px;
+      gap: 12px;
       align-items: center;
       flex-wrap: wrap;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
     }
     .filter-group {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 4px;
     }
     .filter-group label {
-      font-weight: bold;
-      font-size: 14px;
-      color: #333;
+      font-weight: 600;
+      font-size: 11px;
+      color: #1f2937;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
     }
     .filter-group select,
     .filter-group input {
       padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 5px;
-      font-size: 14px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 13px;
+      transition: all 0.3s ease;
+      background: white;
+    }
+    .filter-group select:focus,
+    .filter-group input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
     }
     .search-input {
-      width: 300px;
+      width: 280px;
     }
     .apply-btn {
-      background: #28a745;
-      color: white;
-      padding: 10px 20px;
+      padding: 10px 18px;
       border: none;
-      border-radius: 5px;
+      border-radius: 12px;
       cursor: pointer;
-      font-weight: bold;
-      margin-top: 20px;
+      font-weight: 700;
+      margin-top: 14px;
+      font-size: 12px;
+      color: white;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: relative;
+      overflow: hidden;
     }
     .apply-btn:hover {
-      background: #218838;
+      transform: translateY(-3px) scale(1.02);
+    }
+    .apply-btn:active {
+      transform: translateY(-1px) scale(0.98);
     }
     .edit-btn {
-      background: #28a745;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: white;
-      padding: 5px 10px;
+      padding: 6px 12px;
       border: none;
-      border-radius: 3px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 12px;
       margin-bottom: 3px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
     }
     .edit-btn:hover {
-      background: #218838;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
     }
     .delete-btn {
-      background: #dc3545;
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
       color: white;
-      padding: 5px 10px;
+      padding: 6px 12px;
       border: none;
-      border-radius: 3px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 12px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
     }
     .delete-btn:hover {
-      background: #c82333;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
     }
     .save-btn {
-      background: #007bff;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
       color: white;
-      padding: 5px 10px;
+      padding: 8px 16px;
       border: none;
-      border-radius: 3px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 12px;
-      margin-right: 5px;
+      margin-right: 4px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+    .save-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     }
     .cancel-btn {
-      background: #6c757d;
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
       color: white;
-      padding: 5px 10px;
+      padding: 8px 16px;
       border: none;
-      border-radius: 3px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 12px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
+    }
+    .cancel-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(107, 114, 128, 0.4);
     }
     .editable-cell {
       position: relative;
     }
     select.payment-select {
-      padding: 5px;
-      font-size: 14px;
-      border: 1px solid #ddd;
-      border-radius: 3px;
+      padding: 8px;
+      font-size: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 5px;
       width: 100%;
-      margin-bottom: 5px;
+      margin-bottom: 6px;
     }
     input.edit-input {
-      padding: 5px;
-      font-size: 14px;
-      border: 1px solid #ddd;
-      border-radius: 3px;
+      padding: 8px;
+      font-size: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 5px;
       width: 100%;
-      margin-bottom: 5px;
+      margin-bottom: 6px;
     }
   </style>
   <script>
@@ -939,8 +1070,8 @@ const server = http.createServer(async (req, res) => {
       
       // Przyciski zapisz i anuluj
       actionsCell.innerHTML = \`
-        <button class="save-btn" onclick="saveOrder(\${orderId})">💾 Zapisz</button>
-        <button class="cancel-btn" onclick="location.reload()">✖ Anuluj</button>
+        <button class="save-btn" onclick="saveOrder(\${orderId})">Zapisz</button>
+        <button class="cancel-btn" onclick="location.reload()">Anuluj</button>
       \`;
     }
     
@@ -1031,19 +1162,23 @@ const server = http.createServer(async (req, res) => {
   </script>
 </head>
 <body>
-  <h1>🍕 Zamówienia Pizza App</h1>
-  
-  <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-    <button class="apply-btn" onclick="window.location.href='/customer-dashboard'">
-      📊 Statystyki Klientów
-    </button>
-    <button class="apply-btn" onclick="window.location.href='/sesja'" style="background: #10b981;">
-      💼 SESJA
-    </button>
-    <button class="apply-btn" onclick="window.location.href='/zakupy-lista'" style="background: #f59e0b;">
-      🛒 Lista zakupów
-    </button>
-  </div>
+  <div style="max-width: 1600px; margin: 0 auto;">
+    <h1 style="color: #1f2937; font-size: 2.2em; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 20px;">Zamówienia Pizza App</h1>
+    
+    <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: nowrap;">
+      <button class="apply-btn" onclick="window.location.href='http://localhost:3000'" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4);">
+        Formularz zamówienia
+      </button>
+      <button class="apply-btn" onclick="window.location.href='/customer-dashboard'" style="background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);">
+        Statystyki Klientów
+      </button>
+      <button class="apply-btn" onclick="window.location.href='/sesja'" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);">
+        Sesja
+      </button>
+      <button class="apply-btn" onclick="window.location.href='/zakupy-lista'" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);">
+        Lista zakupów
+      </button>
+    </div>
   
   <div class="filters-container">
     <div class="filter-group">
@@ -1072,12 +1207,12 @@ const server = http.createServer(async (req, res) => {
     
     <div class="filter-group">
       <label>&nbsp;</label>
-      <button class="apply-btn" onclick="applyFilters()">🔍 Zastosuj filtry</button>
+      <button class="apply-btn" onclick="applyFilters()">Zastosuj filtry</button>
     </div>
     
     <div class="filter-group">
       <label>&nbsp;</label>
-      <button class="refresh-btn" onclick="resetFilters()">🔄 Resetuj</button>
+      <button class="refresh-btn" onclick="resetFilters()">Resetuj</button>
     </div>
   </div>
   
@@ -1085,35 +1220,33 @@ const server = http.createServer(async (req, res) => {
   
   <table>
     <tr>
-      <th style="width: 50px;">ID</th>
-      <th style="width: 100px;">Typ</th>
+      <th style="width: 80px;">Typ</th>
       <th style="width: 100px;">Telefon</th>
       <th style="width: 150px;">Adres</th>
-      <th style="width: 60px;">Kupony</th>
-      <th style="width: 250px;">Pizze (szczegóły)</th>
-      <th style="width: 200px;">Modyfikacje składników</th>
-      <th style="width: 100px;">Sosy</th>
-      <th style="width: 120px;">Napój</th>
-      <th style="width: 120px;">Dodatki</th>
-      <th style="width: 80px;">Cena</th>
+      <th style="width: 180px;">Pizze</th>
+      <th style="width: 140px;">Modyfikacje</th>
+      <th style="width: 80px;">Sosy</th>
+      <th style="width: 80px;">Napój</th>
+      <th style="width: 90px;">Dodatki</th>
+      <th style="width: 100px;">Cena</th>
+      <th style="width: 90px;">Kupony</th>
       <th style="width: 100px;">Płatność</th>
       <th style="width: 100px;">Kierowca</th>
-      <th style="width: 140px;">Data</th>
-      <th style="width: 80px;">Akcje</th>
+      <th style="width: 130px;">Data</th>
+      <th style="width: 180px;">Akcje</th>
     </tr>
     ${orders.map((order, i) => `
     <tr id="row-${order.id}" style="vertical-align: top;">
-      <td>${order.id || order.rowid || '-'}</td>
       <td>${formatTypZamowienia(order.typ_zamowienia)}</td>
       <td id="telefon-${order.id}" class="editable-cell">${order.telefon || '-'}</td>
       <td id="adres-${order.id}" class="editable-cell">${order.adres || '-'}</td>
-      <td>${(typeof order.is_kupony !== 'undefined' && order.is_kupony === 1) ? 'KUPONY' : '-'}</td>
-      <td style="max-width: 250px; word-wrap: break-word;">${formatPizzaInfo(order.pizze || order.pizza)}</td>
-      <td style="max-width: 200px; word-wrap: break-word; font-size: 12px;">${order.skladniki || '-'}</td>
-      <td>${order.sosy || '-'}</td>
-      <td>${formatNapojInfo(order.napoj)}</td>
-      <td>${order.pozycje_extra || order.dodatki || '-'}</td>
+      <td style="max-width: 160px; word-wrap: break-word; font-size: 11px;">${formatPizzaInfo(order.pizze || order.pizza)}</td>
+      <td style="max-width: 120px; word-wrap: break-word; font-size: 10px;">${order.skladniki || '-'}</td>
+      <td style="font-size: 10px; line-height: 1.3;">${formatSosyInfo(order.sosy)}</td>
+      <td style="font-size: 11px;">${formatNapojInfo(order.napoj)}</td>
+      <td style="font-size: 11px;">${order.pozycje_extra || order.dodatki || '-'}</td>
       <td id="price-${order.id}" class="editable-cell">${order.cena_calkowita || order.cena || '-'} PLN</td>
+      <td>${(typeof order.is_kupony !== 'undefined' && order.is_kupony === 1) ? 'KUPONY' : '-'}</td>
       <td id="payment-${order.id}" class="editable-cell">
         ${order.platnosc || '-'}
       </td>

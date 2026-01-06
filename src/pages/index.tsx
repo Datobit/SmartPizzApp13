@@ -20,8 +20,8 @@ interface OrderData {
   adres: string;
   pizze: PizzaSelection[];
   sosy: {
-    pomidorowy: number;
-    czosnkowy: number;
+    pom: number;
+    czos: number;
   };
   napojeIds: number[];
   pozycjeExtraIds: number[];
@@ -36,7 +36,7 @@ export default function Home() {
     telefon: "",
     adres: "",
     pizze: [],
-    sosy: { pomidorowy: 0, czosnkowy: 0 },
+    sosy: { pom: 0, czos: 0 },
     napojeIds: [],
     pozycjeExtraIds: [],
     platnosc: "gotowka",
@@ -58,6 +58,7 @@ export default function Home() {
   const [showAddPizza, setShowAddPizza] = useState(false);
   const [isPolNaPol, setIsPolNaPol] = useState(false);
   const [isKupony, setIsKupony] = useState(false);
+  const [previousUlica, setPreviousUlica] = useState("");
   const [showPolNaPolSelector, setShowPolNaPolSelector] = useState(false);
   const [firstPizzaId, setFirstPizzaId] = useState<number | null>(null);
   const [expandedPizzaIndex, setExpandedPizzaIndex] = useState<number | null>(null);
@@ -66,8 +67,17 @@ export default function Home() {
   const [userManuallyChangedDzielnica, setUserManuallyChangedDzielnica] = useState(false);
   const [addressNotRecognized, setAddressNotRecognized] = useState(false);
   const [wybranaSesjaId, setWybranaSesjaId] = useState<number | null>(null);
+  const [showKeyboard, setShowKeyboard] = useState(false);
+  const [activeInputRef, setActiveInputRef] = useState<React.RefObject<HTMLInputElement> | null>(null);
+  const [keyboardType, setKeyboardType] = useState<'text' | 'numeric'>('text');
+  const [capsLock, setCapsLock] = useState(false);
+  const [showPolishChars, setShowPolishChars] = useState(false);
   
   const numerDomuInputRef = useRef<HTMLInputElement>(null);
+  const telefonInputRef = useRef<HTMLInputElement>(null);
+  const ulicaInputRef = useRef<HTMLInputElement>(null);
+  const mieszkanieInputRef = useRef<HTMLInputElement>(null);
+  const dodatkoweInfoInputRef = useRef<HTMLInputElement>(null);
 
   // Queries
   const { data: pizzas, isLoading: pizzasLoading, error: pizzasError } = api.pizza.getAllPizzas.useQuery();
@@ -78,7 +88,7 @@ export default function Home() {
 
   const searchStreets = api.pizza.searchUlice.useQuery(
     { query: ulica },
-    { enabled: ulica.length > 2 }
+    { enabled: ulica.length > 2 && ulica !== previousUlica }
   );
 
   const dzielnicaInfo = api.pizza.getDzielnicaForUlica.useQuery(
@@ -183,11 +193,18 @@ export default function Home() {
       }
     } else {
       // Adres nie został znaleziony w bazie
-      console.log("Adres NIE znaleziony - ustawiam addressNotRecognized na TRUE");
-      setAddressNotRecognized(true);
-      setDzielnicaNazwa("");
-      if (!userManuallyChangedDzielnica) {
-        setCustomDeliveryPrice(null);
+      // Pokazuj ostrzeżenie tylko gdy użytkownik wpisał wystarczająco dużo danych
+      // (co najmniej 3 znaki ulicy i numer domu - aby nie pokazywać podczas wpisywania)
+      if (ulica.length >= 3 && numerDomu.length >= 1) {
+        console.log("Adres NIE znaleziony - ustawiam addressNotRecognized na TRUE");
+        setAddressNotRecognized(true);
+        setDzielnicaNazwa("");
+        if (!userManuallyChangedDzielnica) {
+          setCustomDeliveryPrice(null);
+        }
+      } else {
+        // Użytkownik jeszcze wpisuje - nie pokazuj ostrzeżenia
+        setAddressNotRecognized(false);
       }
     }
   }, [dzielnicaInfo.data, dzielnicaInfo.isFetching, userManuallyChangedDzielnica, ulica, numerDomu, typZamowienia]);
@@ -209,7 +226,7 @@ export default function Home() {
 
   // Kalkuluj cenę na żywo
   useEffect(() => {
-    if (orderData.pizze.length > 0 || orderData.napojeIds.length > 0 || orderData.pozycjeExtraIds.length > 0 || orderData.sosy.pomidorowy > 0 || orderData.sosy.czosnkowy > 0) {
+    if (orderData.pizze.length > 0 || orderData.napojeIds.length > 0 || orderData.pozycjeExtraIds.length > 0 || orderData.sosy.pom > 0 || orderData.sosy.czos > 0) {
       console.log("Wysyłam do kalkulacji, napojeIds:", orderData.napojeIds);
       
       // Przygotuj modyfikacje składników w formacie: { "0": { "pieczarki": 2, "szynka": 0 }, "1": {...} }
@@ -411,7 +428,7 @@ export default function Home() {
       telefon: "",
       adres: "",
       pizze: [],
-      sosy: { pomidorowy: 0, czosnkowy: 0 },
+      sosy: { pom: 0, czos: 0 },
       napojeIds: [],
       pozycjeExtraIds: [],
       platnosc: "gotowka",
@@ -519,8 +536,8 @@ export default function Home() {
     
     // Walidacja - tylko dla dowozu sprawdzamy telefon i adres
     if (typZamowienia === "dowoz") {
-      if (!/^\d{7,11}$/.test(orderData.telefon)) {
-        alert("Telefon musi mieć 7-11 cyfr");
+      if (!orderData.telefon.trim()) {
+        alert("Numer telefonu jest wymagany");
         return;
       }
       
@@ -542,6 +559,7 @@ export default function Home() {
 
     try {
       console.log("Składanie zamówienia:", orderData);
+      console.log("Sosy przed wysłaniem:", orderData.sosy);
       
       // Przygotuj obiekt modyfikacjeSkladnikow
       const modyfikacjeSkladnikow: Record<string, Record<string, number>> = {};
@@ -621,247 +639,891 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="min-h-screen bg-gray-100 py-8">
+      <main className="min-h-screen bg-gray-50 py-4">
         <div className="container mx-auto max-w-4xl px-4">
-          <h1 className="mb-8 text-center text-4xl font-bold text-gray-800">
-            🍕 SmartPizzApp
-          </h1>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-4xl font-black text-gray-900 tracking-tight" style={{ marginLeft: '30px' }}>
+              SmartPizzApp
+            </h1>
+            <a
+              href="http://localhost:3006"
+              className="bg-gradient-to-r from-orange-600 to-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold hover:from-orange-700 hover:to-orange-800 shadow-lg hover:shadow-xl transition-all"
+            >
+              Orders Viewer
+            </a>
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow-lg">
+          <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded-xl shadow-xl border border-gray-100">
             {/* Wybór typu zamówienia */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-700 mb-2 uppercase">
                 Typ zamówienia
               </label>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   type="button"
                   onClick={() => setTypZamowienia("na_miejscu")}
-                  className={`p-4 rounded-lg border-2 font-semibold transition-all ${
+                  className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
                     typZamowienia === "na_miejscu"
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
+                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-600 shadow-lg scale-105"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:shadow-md"
                   }`}
                 >
-                  🍽️ Na miejscu
+                  Na miejscu
                 </button>
                 <button
                   type="button"
                   onClick={() => setTypZamowienia("na_wynos")}
-                  className={`p-4 rounded-lg border-2 font-semibold transition-all ${
+                  className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
                     typZamowienia === "na_wynos"
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
+                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-600 shadow-lg scale-105"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:shadow-md"
                   }`}
                 >
-                  🛍️ Na wynos
+                  Na wynos
                 </button>
                 <button
                   type="button"
                   onClick={() => setTypZamowienia("dowoz")}
-                  className={`p-4 rounded-lg border-2 font-semibold transition-all ${
+                  className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
                     typZamowienia === "dowoz"
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
+                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-600 shadow-lg scale-105"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:shadow-md"
                   }`}
                 >
-                  🚗 Dowóz
+                  Dowóz
                 </button>
               </div>
             </div>
 
             {/* Dane kontaktowe - tylko dla dowozu */}
             {typZamowienia === "dowoz" && (
-              <div className="space-y-4">
+              <div>
                 {/* Telefon */}
-                <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Telefon (7-11 cyfr)
+                <div className="mb-2">
+                <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">
+                  Telefon
                 </label>
                 <input
+                  ref={telefonInputRef}
                   type="tel"
                   value={orderData.telefon.replace(/(\d{3})(?=\d)/g, '$1 ')}
                   onChange={(e) => {
                     const cleanedValue = e.target.value.replace(/\s/g, '');
                     setOrderData(prev => ({ ...prev, telefon: cleanedValue }));
                   }}
-                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  onFocus={() => {
+                    if (!showKeyboard || activeInputRef?.current !== telefonInputRef.current) {
+                      setActiveInputRef(telefonInputRef);
+                      setKeyboardType('numeric');
+                      setShowKeyboard(true);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                    }
+                  }}
+                  className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
                   placeholder="123 456 789"
                   required
                 />
               </div>
 
-              {/* Adres dostawy - 3 pola */}
+              {/* Adres dostawy - 3 wiersze */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">
                   Adres dostawy
                 </label>
-                {/* Klaster/Dzielnica */}
-                <div className="mb-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Dzielnica
-                  </label>
-                  <select
-                    value={miejscowosc}
-                    onChange={(e) => {
-                      const newMiejscowosc = e.target.value;
-                      setMiejscowosc(newMiejscowosc);
-                      // Oznacz że użytkownik ręcznie zmienił dzielnicę
-                      setUserManuallyChangedDzielnica(true);
-                      setAddressNotRecognized(true);
-                      // Reset ceny przy ręcznej zmianie dzielnicy
-                      setCustomDeliveryPrice(null);
-                    }}
-                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="">-- Wybierz dzielnicę --</option>
-                    <option value="Południe">Południe (0 PLN)</option>
-                    <option value="Kazimierza Wlk.-Śródmieście">Kazimierza Wlk.-Śródmieście (5 PLN)</option>
-                    <option value="Michelin">Michelin (5 PLN)</option>
-                    <option value="Zazamcze">Zazamcze (5 PLN)</option>
-                    <option value="Płocka">Płocka (7 PLN)</option>
-                    <option value="Zawiśle">Zawiśle (7 PLN)</option>
-                    <option value="Nowa Wieś">Nowa Wieś (10 PLN)</option>
-                    <option value="Rybnica">Rybnica (10 PLN)</option>
-                    <option value="Szpetal Górny">Szpetal Górny (10 PLN)</option>
-                    <option value="Toruńska-Anwil">Toruńska-Anwil (10 PLN)</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  {/* Ulica z podpowiedziami */}
-                  <div className="relative md:col-span-2">
-                    <input
-                      type="text"
-                      value={ulica}
+                
+                {/* Wiersz 1: Dzielnica | Dodatkowe informacje */}
+                <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+                  {/* Dzielnica */}
+                  <div>
+                    <select
+                      value={miejscowosc}
                       onChange={(e) => {
-                        setUlica(e.target.value);
-                        // Reset dzielnicy przy zmianie ulicy - aby backend szukał we wszystkich dzielnicach
-                        setMiejscowosc("");
-                        setUserManuallyChangedDzielnica(false);
+                        const newMiejscowosc = e.target.value;
+                        setMiejscowosc(newMiejscowosc);
+                        // Oznacz że użytkownik ręcznie zmienił dzielnicę
+                        setUserManuallyChangedDzielnica(true);
+                        setAddressNotRecognized(true);
+                        // Reset ceny przy ręcznej zmianie dzielnicy
+                        setCustomDeliveryPrice(null);
                       }}
+                      className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm transition-all"
+                    >
+                      <option value="">-- Wybierz dzielnicę --</option>
+                      <option value="Południe">Południe (0 PLN)</option>
+                      <option value="Kazimierza Wlk.-Śródmieście">Kazimierza Wlk.-Śródmieście (5 PLN)</option>
+                      <option value="Michelin">Michelin (5 PLN)</option>
+                      <option value="Zazamcze">Zazamcze (5 PLN)</option>
+                      <option value="Płocka">Płocka (7 PLN)</option>
+                      <option value="Zawiśle">Zawiśle (7 PLN)</option>
+                      <option value="Nowa Wieś">Nowa Wieś (10 PLN)</option>
+                      <option value="Rybnica">Rybnica (10 PLN)</option>
+                      <option value="Szpetal Górny">Szpetal Górny (10 PLN)</option>
+                      <option value="Toruńska-Anwil">Toruńska-Anwil (10 PLN)</option>
+                    </select>
+                  </div>
+
+                  {/* Dodatkowe informacje */}
+                  <div>
+                    <input
+                      ref={dodatkoweInfoInputRef}
+                      type="text"
+                      value={dodatkoweInfo}
+                      onChange={(e) => setDodatkoweInfo(e.target.value)}
                       onFocus={() => {
-                        // Pokaż sugestie tylko jeśli użytkownik wpisuje coś nowego
-                        if (ulica.length >= 3 && streetSuggestions.length > 0) {
-                          setShowSuggestions(true);
+                        if (!showKeyboard || activeInputRef?.current !== dodatkoweInfoInputRef.current) {
+                          setActiveInputRef(dodatkoweInfoInputRef);
+                          setKeyboardType('text');
+                          setShowKeyboard(true);
                         }
-                      }}
-                      onBlur={() => {
-                        // Ukryj sugestie po opuszczeniu pola (z małym opóźnieniem dla kliknięć)
-                        setTimeout(() => {
-                          setShowSuggestions(false);
-                          setSelectedSuggestionIndex(-1);
-                        }, 200);
                       }}
                       onKeyDown={(e) => {
-                        if (!showSuggestions || streetSuggestions.length === 0) return;
-                        
-                        if (e.key === 'Tab') {
+                        if (e.key === 'Enter') {
                           e.preventDefault();
-                          // Przejść do następnej sugestii
-                          setSelectedSuggestionIndex((prev) => {
-                            const next = prev + 1;
-                            return next >= streetSuggestions.length ? 0 : next;
-                          });
-                        } else if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          setSelectedSuggestionIndex((prev) => {
-                            const next = prev + 1;
-                            return next >= streetSuggestions.length ? 0 : next;
-                          });
-                        } else if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          setSelectedSuggestionIndex((prev) => {
-                            const next = prev - 1;
-                            return next < 0 ? streetSuggestions.length - 1 : next;
-                          });
-                        } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
-                          e.preventDefault();
-                          const selected = streetSuggestions[selectedSuggestionIndex];
-                          if (selected) handleStreetSelect(selected.ulica);
-                        } else if (e.key === 'Escape') {
-                          setShowSuggestions(false);
-                          setSelectedSuggestionIndex(-1);
                         }
                       }}
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                      placeholder="Nazwa ulicy..."
-                      required
+                      className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+                      placeholder="Dodatkowe informacje (np. piętro, kod domofonu)"
                     />
-                    {showSuggestions && streetSuggestions.length > 0 && (
-                      <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-96 overflow-y-auto">
-                        {streetSuggestions.map((street, index) => (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() => handleStreetSelect(street.ulica)}
-                            className={`w-full text-left px-3 py-2 transition-colors flex justify-between items-center ${
-                              index === selectedSuggestionIndex
-                                ? 'bg-blue-50 border-2 border-blue-400 border-opacity-50'
-                                : 'hover:bg-gray-100 border-2 border-transparent'
-                            }`}
-                          >
-                            <span className="font-medium">{street.ulica}</span>
-                            <span className="text-sm text-gray-500 ml-2">({street.dzielnica_nazwa})</span>
-                          </button>
+                  </div>
+                </div>
+
+                {/* Wiersz 2: Ulica / Nr / Mieszkanie */}
+                <div className="flex gap-1.5 mb-1.5">
+                    {/* Ulica - 75% szerokości */}
+                    <div className="relative flex-[3]">
+                      <input
+                        ref={ulicaInputRef}
+                        type="text"
+                        value={ulica}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setPreviousUlica(ulica); // Zapisz poprzednią wartość przed zmianą
+                          setUlica(newValue);
+                          // Reset dzielnicy przy zmianie ulicy - aby backend szukał we wszystkich dzielnicach
+                          setMiejscowosc("");
+                          setUserManuallyChangedDzielnica(false);
+                          
+                          // Pokaż sugestie tylko gdy użytkownik edytuje (wpisuje coś)
+                          if (newValue.length >= 3 && streetSuggestions.length > 0) {
+                            setShowSuggestions(true);
+                          }
+                        }}
+                        onFocus={() => {
+                          if (!showKeyboard || activeInputRef?.current !== ulicaInputRef.current) {
+                            setActiveInputRef(ulicaInputRef);
+                            setKeyboardType('text');
+                            setShowKeyboard(true);
+                          }
+                          // Nie pokazuj sugestii automatycznie przy fokusie - tylko przy edycji
+                        }}
+                        onBlur={() => {
+                          // Nie ukrywaj sugestii gdy klawiatura ekranowa jest widoczna
+                          if (!showKeyboard) {
+                            setTimeout(() => {
+                              setShowSuggestions(false);
+                              setSelectedSuggestionIndex(-1);
+                            }, 200);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          // Zawsze zapobiegaj submitowi formularza przy Enter
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                          
+                          if (!showSuggestions || streetSuggestions.length === 0) return;
+                          
+                          if (e.key === 'Tab') {
+                            e.preventDefault();
+                            // Przejść do następnej sugestii
+                            setSelectedSuggestionIndex((prev) => {
+                              const next = prev + 1;
+                              return next >= streetSuggestions.length ? 0 : next;
+                            });
+                          } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setSelectedSuggestionIndex((prev) => {
+                              const next = prev + 1;
+                              return next >= streetSuggestions.length ? 0 : next;
+                            });
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setSelectedSuggestionIndex((prev) => {
+                              const next = prev - 1;
+                              return next < 0 ? streetSuggestions.length - 1 : next;
+                            });
+                          } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+                            const selected = streetSuggestions[selectedSuggestionIndex];
+                            if (selected) handleStreetSelect(selected.ulica);
+                          } else if (e.key === 'Escape') {
+                            setShowSuggestions(false);
+                            setSelectedSuggestionIndex(-1);
+                          }
+                        }}
+                        className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+                        placeholder="Ulica"
+                        required
+                      />
+                      {showSuggestions && streetSuggestions.length > 0 && (
+                        <div 
+                          className="absolute z-[60] w-full bg-white border-2 border-gray-200 rounded-lg shadow-2xl bottom-full mb-1 max-h-60 overflow-y-auto"
+                          onMouseDown={(e) => {
+                            // Zapobiegaj blur na input gdy klikamy w sugestie
+                            e.preventDefault();
+                          }}
+                        >
+                          {streetSuggestions.map((street, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => handleStreetSelect(street.ulica)}
+                              className={`w-full text-left px-3 py-2 transition-all flex justify-between items-center ${
+                                index === selectedSuggestionIndex
+                                  ? 'bg-blue-50 border-2 border-blue-400'
+                                  : 'hover:bg-gray-50 border-2 border-transparent'
+                              }`}
+                            >
+                              <span className="font-semibold text-gray-900 text-sm">{street.ulica}</span>
+                              <span className="text-xs text-gray-600 ml-2">({street.dzielnica_nazwa})</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Numer - 25% szerokości */}
+                    <div className="flex-1">
+                      <input
+                        ref={numerDomuInputRef}
+                        type="text"
+                        value={numerDomu}
+                        onChange={(e) => {
+                          setNumerDomu(e.target.value);
+                          // Reset dzielnicy przy zmianie numeru - aby backend szukał we wszystkich dzielnicach
+                          setMiejscowosc("");
+                          setUserManuallyChangedDzielnica(false);
+                        }}
+                        onFocus={() => {
+                          if (!showKeyboard || activeInputRef?.current !== numerDomuInputRef.current) {
+                            setActiveInputRef(numerDomuInputRef);
+                            setKeyboardType('text');
+                            setShowKeyboard(true);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                        }}
+                        className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+                        placeholder="Nr"
+                        required
+                      />
+                    </div>
+
+                    {/* Mieszkanie */}
+                    <div className="flex-1">
+                      <input
+                        ref={mieszkanieInputRef}
+                        type="text"
+                        value={numerMieszkania}
+                        onChange={(e) => setNumerMieszkania(e.target.value)}
+                        onFocus={() => {
+                          if (!showKeyboard || activeInputRef?.current !== mieszkanieInputRef.current) {
+                            setActiveInputRef(mieszkanieInputRef);
+                            setKeyboardType('text');
+                            setShowKeyboard(true);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                        }}
+                        className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+                        placeholder="Mieszkanie"
+                      />
+                    </div>
+                  </div>
+
+                {/* On-Screen Keyboard - inline widget - tuż pod polami tekstowymi */}
+                {showKeyboard && (
+                  <div className="bg-gray-700 p-3 rounded-xl shadow-xl border-2 border-gray-600 mt-2">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-white text-sm font-semibold">Klawiatura</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowKeyboard(false);
+                          setShowSuggestions(false);
+                        }}
+                        className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-500"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    
+                    {keyboardType === 'numeric' ? (
+                      // Numeric keyboard (for telefon) - matching text keyboard size
+                      <div className="space-y-1">
+                        {/* Rows 1-3: Numbers 1-9 */}
+                        {[['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']].map((row, rowIndex) => (
+                          <div key={rowIndex} className="grid grid-cols-3 gap-1">
+                            {row.map((key) => (
+                              <button
+                                type="button"
+                                key={key}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  if (activeInputRef?.current) {
+                                    const input = activeInputRef.current;
+                                    const start = input.selectionStart || 0;
+                                    const end = input.selectionEnd || 0;
+                                    
+                                    if (input === telefonInputRef.current) {
+                                      // Pracuj na czystej wartości (bez spacji)
+                                      const currentCleanValue = orderData.telefon;
+                                      // Oblicz pozycję kursora w czystym stringu (usuń spacje przed kursorem)
+                                      const cleanCursorPos = input.value.substring(0, start).replace(/\s/g, '').length;
+                                      // Dodaj cyfrę w odpowiednim miejscu czystego stringu
+                                      const newCleanValue = currentCleanValue.substring(0, cleanCursorPos) + key + currentCleanValue.substring(cleanCursorPos);
+                                      setOrderData(prev => ({ ...prev, telefon: newCleanValue }));
+                                      
+                                      // Oblicz nową pozycję kursora w sformatowanym stringu
+                                      requestAnimationFrame(() => {
+                                        const newCleanCursorPos = cleanCursorPos + 1;
+                                        // Policz ile spacji będzie przed nową pozycją kursora
+                                        const spacesBeforeCursor = Math.floor((newCleanCursorPos - 1) / 3);
+                                        const newFormattedCursorPos = newCleanCursorPos + spacesBeforeCursor;
+                                        input.setSelectionRange(newFormattedCursorPos, newFormattedCursorPos);
+                                      });
+                                    } else if (input === numerDomuInputRef.current) {
+                                      const newValue = input.value.substring(0, start) + key + input.value.substring(end);
+                                      setNumerDomu(newValue);
+                                      
+                                      requestAnimationFrame(() => {
+                                        input.setSelectionRange(start + 1, start + 1);
+                                      });
+                                    }
+                                  }
+                                }}
+                                className="bg-gray-600 text-white p-3 rounded-lg text-xl font-semibold hover:bg-gray-500 active:bg-gray-400"
+                              >
+                                {key}
+                              </button>
+                            ))}
+                          </div>
                         ))}
+                        
+                        {/* Row 4: 0 and Del */}
+                        <div className="grid grid-cols-3 gap-1">
+                          <div></div>
+                          {/* 0 button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (activeInputRef?.current) {
+                                const input = activeInputRef.current;
+                                const start = input.selectionStart || 0;
+                                const end = input.selectionEnd || 0;
+                                
+                                if (input === telefonInputRef.current) {
+                                  const currentCleanValue = orderData.telefon;
+                                  const cleanCursorPos = input.value.substring(0, start).replace(/\s/g, '').length;
+                                  const newCleanValue = currentCleanValue.substring(0, cleanCursorPos) + '0' + currentCleanValue.substring(cleanCursorPos);
+                                  setOrderData(prev => ({ ...prev, telefon: newCleanValue }));
+                                  
+                                  requestAnimationFrame(() => {
+                                    const newCleanCursorPos = cleanCursorPos + 1;
+                                    const spacesBeforeCursor = Math.floor((newCleanCursorPos - 1) / 3);
+                                    const newFormattedCursorPos = newCleanCursorPos + spacesBeforeCursor;
+                                    input.setSelectionRange(newFormattedCursorPos, newFormattedCursorPos);
+                                  });
+                                } else if (input === numerDomuInputRef.current) {
+                                  const newValue = input.value.substring(0, start) + '0' + input.value.substring(end);
+                                  setNumerDomu(newValue);
+                                  
+                                  requestAnimationFrame(() => {
+                                    input.setSelectionRange(start + 1, start + 1);
+                                  });
+                                }
+                              }
+                            }}
+                            className="bg-gray-600 text-white p-3 rounded-lg text-xl font-semibold hover:bg-gray-500 active:bg-gray-400"
+                          >
+                            0
+                          </button>
+                          {/* Del button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (activeInputRef?.current) {
+                                const input = activeInputRef.current;
+                                const start = input.selectionStart || 0;
+                                
+                                if (input === telefonInputRef.current) {
+                                  const currentCleanValue = orderData.telefon;
+                                  const cleanCursorPos = input.value.substring(0, start).replace(/\s/g, '').length;
+                                  const newCleanValue = currentCleanValue.substring(0, Math.max(0, cleanCursorPos - 1)) + currentCleanValue.substring(cleanCursorPos);
+                                  
+                                  setOrderData(prev => ({ ...prev, telefon: newCleanValue }));
+                                  
+                                  requestAnimationFrame(() => {
+                                    const newCleanCursorPos = Math.max(0, cleanCursorPos - 1);
+                                    const spacesBeforeCursor = Math.floor((newCleanCursorPos > 0 ? newCleanCursorPos - 1 : 0) / 3);
+                                    const newFormattedCursorPos = newCleanCursorPos + spacesBeforeCursor;
+                                    input.setSelectionRange(newFormattedCursorPos, newFormattedCursorPos);
+                                  });
+                                } else if (input === numerDomuInputRef.current) {
+                                  const newValue = input.value.substring(0, Math.max(0, start - 1)) + input.value.substring(start);
+                                  setNumerDomu(newValue);
+                                  
+                                  requestAnimationFrame(() => {
+                                    input.setSelectionRange(Math.max(0, start - 1), Math.max(0, start - 1));
+                                  });
+                                }
+                              }
+                            }}
+                            className="bg-red-600 text-white p-2 rounded-lg text-lg font-semibold hover:bg-red-500 active:bg-red-400"
+                          >
+                            DEL
+                          </button>
+                        </div>
+                        
+                        {/* Row 5: ABC button and Enter */}
+                        <div className="grid grid-cols-3 gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setKeyboardType('text');
+                            }}
+                            className="col-span-2 bg-gray-600 text-white p-2 rounded-lg text-sm font-semibold hover:bg-gray-500"
+                          >
+                            ABC
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setShowKeyboard(false);
+                              setShowSuggestions(false);
+                            }}
+                            className="bg-teal-500 text-white p-2 rounded-lg text-xl font-bold hover:bg-teal-400"
+                          >
+                            ↵
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      // Text keyboard (QWERTY layout matching the image)
+                      <div className="space-y-1">
+                        {/* Row 1: Numbers */}
+                        <div className="grid grid-cols-10 gap-1">
+                          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map((key) => (
+                            <button
+                              type="button"
+                              key={key}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (activeInputRef?.current) {
+                                  const input = activeInputRef.current;
+                                  const start = input.selectionStart || 0;
+                                  const end = input.selectionEnd || 0;
+                                  const newValue = input.value.substring(0, start) + key + input.value.substring(end);
+                                  
+                                  if (input === ulicaInputRef.current) {
+                                    setUlica(newValue);
+                                    setMiejscowosc("");
+                                    setUserManuallyChangedDzielnica(false);
+                                  } else if (input === numerDomuInputRef.current) {
+                                    setNumerDomu(newValue);
+                                    setMiejscowosc("");
+                                    setUserManuallyChangedDzielnica(false);
+                                  } else if (input === mieszkanieInputRef.current) {
+                                    setNumerMieszkania(newValue);
+                                  } else if (input === dodatkoweInfoInputRef.current) {
+                                    setDodatkoweInfo(newValue);
+                                  }
+                                  
+                                  requestAnimationFrame(() => {
+                                    input.setSelectionRange(start + 1, start + 1);
+                                  });
+                                }
+                              }}
+                              className="bg-gray-600 text-white p-3 rounded-lg text-xl font-semibold hover:bg-gray-500 active:bg-gray-400"
+                            >
+                              {key}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        {/* Polskie znaki - pojawia się gdy showPolishChars jest true */}
+                        {showPolishChars && (
+                          <div className="grid grid-cols-9 gap-1 bg-teal-900 p-2 rounded-lg">
+                            {['Ą', 'Ć', 'Ę', 'Ł', 'Ń', 'Ó', 'Ś', 'Ź', 'Ż'].map((key) => (
+                              <button
+                                type="button"
+                                key={key}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  if (activeInputRef?.current) {
+                                    const input = activeInputRef.current;
+                                    const start = input.selectionStart || 0;
+                                    const end = input.selectionEnd || 0;
+                                    const char = capsLock ? key : key.toLowerCase();
+                                    const newValue = input.value.substring(0, start) + char + input.value.substring(end);
+                                    
+                                    // Najpierw ustaw wartość bezpośrednio w input
+                                    input.value = newValue;
+                                    
+                                    // Ustaw pozycję kursora natychmiast
+                                    const newPos = start + 1;
+                                    input.setSelectionRange(newPos, newPos);
+                                    input.focus();
+                                    
+                                    // Następnie zaktualizuj stan React
+                                    if (input === ulicaInputRef.current) {
+                                      setUlica(newValue);
+                                      setMiejscowosc("");
+                                      setUserManuallyChangedDzielnica(false);
+                                    } else if (input === numerDomuInputRef.current) {
+                                      setNumerDomu(newValue);
+                                      setMiejscowosc("");
+                                      setUserManuallyChangedDzielnica(false);
+                                    } else if (input === mieszkanieInputRef.current) {
+                                      setNumerMieszkania(newValue);
+                                    } else if (input === dodatkoweInfoInputRef.current) {
+                                      setDodatkoweInfo(newValue);
+                                    }
+                                  }
+                                }}
+                                className="bg-teal-700 text-white p-2 rounded-lg text-lg font-semibold hover:bg-teal-600 active:bg-teal-500"
+                              >
+                                {capsLock ? key : key.toLowerCase()}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Row 2: QWERTYUIOP */}
+                        <div className="grid grid-cols-10 gap-1">
+                          {['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'].map((key) => (
+                            <button
+                              type="button"
+                              key={key}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (activeInputRef?.current) {
+                                  const input = activeInputRef.current;
+                                  const start = input.selectionStart || 0;
+                                  const end = input.selectionEnd || 0;
+                                  const char = capsLock ? key : key.toLowerCase();
+                                  const newValue = input.value.substring(0, start) + char + input.value.substring(end);
+                                  
+                                  // Najpierw ustaw wartość bezpośrednio w input
+                                  input.value = newValue;
+                                  
+                                  // Ustaw pozycję kursora natychmiast
+                                  const newPos = start + 1;
+                                  input.setSelectionRange(newPos, newPos);
+                                  input.focus();
+                                  
+                                  // Następnie zaktualizuj stan React
+                                  if (input === ulicaInputRef.current) {
+                                    setUlica(newValue);
+                                    setMiejscowosc("");
+                                    setUserManuallyChangedDzielnica(false);
+                                  } else if (input === numerDomuInputRef.current) {
+                                    setNumerDomu(newValue);
+                                    setMiejscowosc("");
+                                    setUserManuallyChangedDzielnica(false);
+                                  } else if (input === mieszkanieInputRef.current) {
+                                    setNumerMieszkania(newValue);
+                                  } else if (input === dodatkoweInfoInputRef.current) {
+                                    setDodatkoweInfo(newValue);
+                                  }
+                                }
+                              }}
+                              className="bg-gray-600 text-white p-2 rounded-lg text-lg font-semibold hover:bg-gray-500 active:bg-gray-400"
+                            >
+                              {capsLock ? key : key.toLowerCase()}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        {/* Row 3: ASDFGHJKL */}
+                        <div className="grid grid-cols-9 gap-1">
+                          {['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'].map((key) => (
+                            <button
+                              type="button"
+                              key={key}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (activeInputRef?.current) {
+                                  const input = activeInputRef.current;
+                                  const start = input.selectionStart || 0;
+                                  const end = input.selectionEnd || 0;
+                                  const char = capsLock ? key : key.toLowerCase();
+                                  const newValue = input.value.substring(0, start) + char + input.value.substring(end);
+                                  
+                                  // Najpierw ustaw wartość bezpośrednio w input
+                                  input.value = newValue;
+                                  
+                                  // Ustaw pozycję kursora natychmiast
+                                  const newPos = start + 1;
+                                  input.setSelectionRange(newPos, newPos);
+                                  input.focus();
+                                  
+                                  // Następnie zaktualizuj stan React
+                                  if (input === ulicaInputRef.current) {
+                                    setUlica(newValue);
+                                    setMiejscowosc("");
+                                    setUserManuallyChangedDzielnica(false);
+                                  } else if (input === numerDomuInputRef.current) {
+                                    setNumerDomu(newValue);
+                                    setMiejscowosc("");
+                                    setUserManuallyChangedDzielnica(false);
+                                  } else if (input === mieszkanieInputRef.current) {
+                                    setNumerMieszkania(newValue);
+                                  } else if (input === dodatkoweInfoInputRef.current) {
+                                    setDodatkoweInfo(newValue);
+                                  }
+                                }
+                              }}
+                              className="bg-gray-600 text-white p-3 rounded-lg text-xl font-semibold hover:bg-gray-500 active:bg-gray-400"
+                            >
+                              {capsLock ? key : key.toLowerCase()}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        {/* Row 4: Shift, ZXCVBNM, Backspace */}
+                        <div className="grid grid-cols-10 gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCapsLock(!capsLock);
+                            }}
+                            className={`bg-gray-600 text-white p-2 rounded-lg text-lg hover:bg-gray-500 ${capsLock ? 'bg-teal-600' : ''}`}
+                          >
+                            ⬆
+                          </button>
+                          {['Z', 'X', 'C', 'V', 'B', 'N', 'M'].map((key) => (
+                            <button
+                              type="button"
+                              key={key}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (activeInputRef?.current) {
+                                  const input = activeInputRef.current;
+                                  const start = input.selectionStart || 0;
+                                  const end = input.selectionEnd || 0;
+                                  const char = capsLock ? key : key.toLowerCase();
+                                  const newValue = input.value.substring(0, start) + char + input.value.substring(end);
+                                  
+                                  // Najpierw ustaw wartość bezpośrednio w input
+                                  input.value = newValue;
+                                  
+                                  // Ustaw pozycję kursora natychmiast
+                                  const newPos = start + 1;
+                                  input.setSelectionRange(newPos, newPos);
+                                  input.focus();
+                                  
+                                  // Następnie zaktualizuj stan React
+                                  if (input === ulicaInputRef.current) {
+                                    setUlica(newValue);
+                                    setMiejscowosc("");
+                                    setUserManuallyChangedDzielnica(false);
+                                  } else if (input === numerDomuInputRef.current) {
+                                    setNumerDomu(newValue);
+                                    setMiejscowosc("");
+                                    setUserManuallyChangedDzielnica(false);
+                                  } else if (input === mieszkanieInputRef.current) {
+                                    setNumerMieszkania(newValue);
+                                  } else if (input === dodatkoweInfoInputRef.current) {
+                                    setDodatkoweInfo(newValue);
+                                  }
+                                }
+                              }}
+                              className="bg-gray-600 text-white p-2 rounded-lg text-lg font-semibold hover:bg-gray-500 active:bg-gray-400"
+                            >
+                              {capsLock ? key : key.toLowerCase()}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (activeInputRef?.current) {
+                                const input = activeInputRef.current;
+                                const start = input.selectionStart || 0;
+                                const newValue = input.value.substring(0, Math.max(0, start - 1)) + input.value.substring(start);
+                                
+                                if (input === ulicaInputRef.current) {
+                                  setUlica(newValue);
+                                } else if (input === numerDomuInputRef.current) {
+                                  setNumerDomu(newValue);
+                                } else if (input === mieszkanieInputRef.current) {
+                                  setNumerMieszkania(newValue);
+                                } else if (input === dodatkoweInfoInputRef.current) {
+                                  setDodatkoweInfo(newValue);
+                                }
+                                
+                                requestAnimationFrame(() => {
+                                  input.setSelectionRange(Math.max(0, start - 1), Math.max(0, start - 1));
+                                });
+                              }
+                            }}
+                            className="col-span-2 bg-gray-600 text-white p-2 rounded-lg text-lg hover:bg-gray-500"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        
+                        {/* Row 5: 123, PL, comma, space, period, enter */}
+                        <div className="grid grid-cols-12 gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setKeyboardType('numeric');
+                            }}
+                            className="col-span-2 bg-gray-600 text-white p-2 rounded-lg text-sm font-semibold hover:bg-gray-500"
+                          >
+                            123
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setShowPolishChars(!showPolishChars);
+                            }}
+                            className={`bg-gray-600 text-white p-2 rounded-lg text-sm font-semibold hover:bg-gray-500 ${showPolishChars ? 'bg-teal-600' : ''}`}
+                          >
+                            PL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (activeInputRef?.current) {
+                                const input = activeInputRef.current;
+                                const start = input.selectionStart || 0;
+                                const newValue = input.value.substring(0, start) + '/' + input.value.substring(start);
+                                
+                                if (input === ulicaInputRef.current) {
+                                  setUlica(newValue);
+                                } else if (input === numerDomuInputRef.current) {
+                                  setNumerDomu(newValue);
+                                } else if (input === mieszkanieInputRef.current) {
+                                  setNumerMieszkania(newValue);
+                                } else if (input === dodatkoweInfoInputRef.current) {
+                                  setDodatkoweInfo(newValue);
+                                }
+                                
+                                requestAnimationFrame(() => {
+                                  input.setSelectionRange(start + 1, start + 1);
+                                });
+                              }
+                            }}
+                            className="bg-gray-600 text-white p-2 rounded-lg text-lg hover:bg-gray-500"
+                          >
+                            /
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (activeInputRef?.current) {
+                                const input = activeInputRef.current;
+                                const start = input.selectionStart || 0;
+                                const newValue = input.value.substring(0, start) + ' ' + input.value.substring(start);
+                                
+                                if (input === ulicaInputRef.current) {
+                                  setUlica(newValue);
+                                } else if (input === numerDomuInputRef.current) {
+                                  setNumerDomu(newValue);
+                                } else if (input === mieszkanieInputRef.current) {
+                                  setNumerMieszkania(newValue);
+                                } else if (input === dodatkoweInfoInputRef.current) {
+                                  setDodatkoweInfo(newValue);
+                                }
+                                
+                                requestAnimationFrame(() => {
+                                  input.setSelectionRange(start + 1, start + 1);
+                                });
+                              }
+                            }}
+                            className="col-span-5 bg-gray-600 text-white p-2 rounded-lg hover:bg-gray-500"
+                          >
+                            
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (activeInputRef?.current) {
+                                const input = activeInputRef.current;
+                                const start = input.selectionStart || 0;
+                                const newValue = input.value.substring(0, start) + '.' + input.value.substring(start);
+                                
+                                if (input === ulicaInputRef.current) {
+                                  setUlica(newValue);
+                                } else if (input === numerDomuInputRef.current) {
+                                  setNumerDomu(newValue);
+                                } else if (input === mieszkanieInputRef.current) {
+                                  setNumerMieszkania(newValue);
+                                } else if (input === dodatkoweInfoInputRef.current) {
+                                  setDodatkoweInfo(newValue);
+                                }
+                                
+                                requestAnimationFrame(() => {
+                                  input.setSelectionRange(start + 1, start + 1);
+                                });
+                              }
+                            }}
+                            className="bg-gray-600 text-white p-2 rounded-lg text-lg hover:bg-gray-500"
+                          >
+                            .
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setShowKeyboard(false);
+                              setShowSuggestions(false);
+                            }}
+                            className="col-span-2 bg-teal-500 text-white p-2 rounded-lg text-xl font-bold hover:bg-teal-400"
+                          >
+                            ↵
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
+                )}
 
-                  {/* Numer */}
-                  <div>
-                    <input
-                      ref={numerDomuInputRef}
-                      type="text"
-                      value={numerDomu}
-                      onChange={(e) => {
-                        setNumerDomu(e.target.value);
-                        // Reset dzielnicy przy zmianie numeru - aby backend szukał we wszystkich dzielnicach
-                        setMiejscowosc("");
-                        setUserManuallyChangedDzielnica(false);
-                      }}
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                      placeholder="Numer"
-                      required
-                    />
-                  </div>
-                  
-                  {/* Mieszkanie */}
-                  <div>
-                    <input
-                      type="text"
-                      value={numerMieszkania}
-                      onChange={(e) => setNumerMieszkania(e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                      placeholder="Mieszkanie"
-                    />
-                  </div>
-                </div>
-
-                {/* Dodatkowe informacje */}
-                <div className="mt-3">
-                  <input
-                    type="text"
-                    value={dodatkoweInfo}
-                    onChange={(e) => setDodatkoweInfo(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                    placeholder="Dodatkowe informacje (np. piętro, kod domofonu)"
-                  />
-                </div>
-
-                {/* Informacja o dzielnicy i cena dostawy - zawsze widoczne dla dowozu */}
+                {/* Wiersz 3: Info o dowozie i cenie dostawy */}
                 {typZamowienia === "dowoz" && (
-                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                    <div className="flex items-center gap-4">
+                  <div className="p-3 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="flex-1">
-                        <span className="text-sm font-medium text-gray-700">Dowóz: </span>
-                        <span className="text-sm font-semibold text-blue-700">
+                        <span className="text-xs font-semibold text-gray-900">Dowóz: </span>
+                        <span className="text-sm font-bold text-blue-700">
                           {dzielnicaNazwa || miejscowosc || "nie rozpoznano"}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-gray-700">Cena dostawy:</label>
+                        <label className="text-xs font-bold text-gray-700 uppercase">Cena dostawy:</label>
                         <input
                           type="number"
                           step="1"
@@ -875,18 +1537,18 @@ export default function Home() {
                               setCustomDeliveryPrice(parseInt(value) || 0);
                             }
                           }}
-                          className="w-24 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                          className="w-20 p-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
                           placeholder="0"
                         />
-                        <span className="text-sm font-medium text-gray-700">PLN</span>
+                        <span className="text-xs font-medium text-gray-700">PLN</span>
                       </div>
                     </div>
                     
                     {/* Ostrzeżenie gdy adres nie został rozpoznany */}
                     {addressNotRecognized && (
-                      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-300 rounded-md">
-                        <p className="text-sm font-semibold text-yellow-800">⚠️ UWAGA! Adres nie został rozpoznany.</p>
-                        <p className="text-sm text-yellow-700">Cena musi zostać wprowadzona ręcznie.</p>
+                      <div className="mt-1.5 p-1.5 bg-yellow-50 border border-yellow-300 rounded">
+                        <p className="text-xs font-semibold text-yellow-800">⚠️ UWAGA! Adres nie został rozpoznany.</p>
+                        <p className="text-xs text-yellow-700">Cena musi zostać wprowadzona ręcznie.</p>
                       </div>
                     )}
                   </div>
@@ -895,35 +1557,34 @@ export default function Home() {
               </div>
             )}
 
-            {/* Wybrane pizze */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Wybrane pizze</h3>
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">Wybrane pizze</h3>
               {orderData.pizze.map((pizza, index) => (
-                <div key={index} className="bg-gray-50 p-3 rounded mb-2">
+                <div key={index} className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-lg border-2 border-orange-600 shadow-sm hover:shadow-md transition-all">
                   <div className="flex justify-between items-center">
-                    <span>{pizza.nazwa} - {pizza.rozmiar} ({pizza.cena} PLN)</span>
+                    <span className="font-semibold text-white text-sm">{pizza.nazwa} - {pizza.rozmiar} ({pizza.cena} PLN)</span>
                     <div className="flex space-x-2">
                       <button
                         type="button"
                         onClick={() => toggleIngredients(index)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
+                        className="text-white hover:text-orange-100 text-xs font-semibold hover:underline"
                       >
                         {expandedPizzaIndex === index ? "Ukryj składniki" : "Edytuj składniki"}
                       </button>
                       <button
                         type="button"
                         onClick={() => removePizza(index)}
-                        className="text-red-600 hover:text-red-800"
+                        className="text-white hover:text-orange-100 font-bold text-base"
                       >
-                        ❌
+                        ✕
                       </button>
                     </div>
                   </div>
                   
                   {/* Edytor składników */}
                   {expandedPizzaIndex === index && (
-                    <div className="mt-3 border-t pt-3">
-                      <h4 className="text-sm font-semibold mb-2">Modyfikuj składniki:</h4>
+                    <div className="mt-2 border-t pt-2">
+                      <h4 className="text-xs font-semibold mb-2">Modyfikuj składniki:</h4>
                       {skladnikiLoading && <div className="text-sm text-gray-500">Ładowanie składników...</div>}
                       {skladnikiError && <div className="text-sm text-red-500">Błąd: {skladnikiError.message}</div>}
                       {!skladnikiLoading && !skladnikiError && (!skladniki || skladniki.length === 0) && (
@@ -955,7 +1616,7 @@ export default function Home() {
                           
                           return (
                             <div key={skladnik.id} className={`flex items-center justify-between p-2 rounded border ${
-                              currentCount > 0 ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'
+                              currentCount > 0 ? 'bg-gray-700 border-gray-700 text-white' : 'bg-white border-gray-200'
                             }`}>
                               <span className="text-sm truncate mr-2" title={skladnik.nazwa}>
                                 {skladnik.nazwa}
@@ -965,15 +1626,19 @@ export default function Home() {
                                   type="button"
                                   onClick={() => updateIngredient(index, skladnik.id, -1)}
                                   disabled={currentCount <= 0}
-                                  className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+                                  className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-300 disabled:opacity-50 ${
+                                    currentCount > 0 ? 'bg-gray-500 text-white' : 'bg-gray-200'
+                                  }`}
                                 >
                                   -
                                 </button>
-                                <span className="w-4 text-center text-sm font-medium">{currentCount}</span>
+                                <span className={`w-4 text-center text-sm font-medium ${currentCount > 0 ? 'text-white' : ''}`}>{currentCount}</span>
                                 <button
                                   type="button"
                                   onClick={() => updateIngredient(index, skladnik.id, 1)}
-                                  className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded hover:bg-gray-300"
+                                  className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-300 ${
+                                    currentCount > 0 ? 'bg-gray-500 text-white' : 'bg-gray-200'
+                                  }`}
                                 >
                                   +
                                 </button>
@@ -991,7 +1656,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setShowAddPizza(true)}
-                  className="w-full p-3 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600"
+                  className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-700 hover:border-blue-500 hover:text-blue-700 hover:bg-blue-50 font-semibold text-sm transition-all"
                 >
                   + Dodaj pizzę
                 </button>
@@ -1000,8 +1665,12 @@ export default function Home() {
 
             {/* Menu pizz */}
             {showAddPizza && (
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              <div className={`p-4 rounded-xl border-2 shadow-md ${
+                orderData.pizze.length > 0 
+                  ? 'bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200' 
+                  : 'bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200'
+              }`}>
+                <h3 className="text-base font-bold text-gray-900 mb-3 uppercase tracking-wide">
                   {showPolNaPolSelector 
                     ? "Wybierz drugą pizzę (pół na pół)"
                     : isPolNaPol 
@@ -1012,16 +1681,16 @@ export default function Home() {
                 
                 {/* Wybór rozmiaru */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Rozmiar</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">Rozmiar</label>
                   <div className="flex gap-3">
                     {isKupony ? (
                       <>
                         <label 
                           className={`flex-1 cursor-pointer transition-all ${
                             currentPizzaSize === "srednia" 
-                              ? 'bg-blue-500 text-white border-blue-500' 
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                          } border rounded-lg px-4 py-3 text-center font-medium`}
+                              ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white border-blue-600 shadow-lg scale-105' 
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:shadow-md'
+                          } border-2 rounded-lg px-4 py-3 text-center font-semibold text-sm`}
                         >
                           <input
                             type="radio"
@@ -1036,9 +1705,9 @@ export default function Home() {
                         <label 
                           className={`flex-1 cursor-pointer transition-all ${
                             currentPizzaSize === "duza" 
-                              ? 'bg-blue-500 text-white border-blue-500' 
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                          } border rounded-lg px-4 py-3 text-center font-medium`}
+                              ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white border-blue-600 shadow-lg scale-105' 
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:shadow-md'
+                          } border-2 rounded-lg px-4 py-3 text-center font-semibold text-sm`}
                         >
                           <input
                             type="radio"
@@ -1061,9 +1730,9 @@ export default function Home() {
                           key={size.key} 
                           className={`flex-1 cursor-pointer transition-all ${
                             currentPizzaSize === size.key 
-                              ? 'bg-blue-500 text-white border-blue-500' 
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                          } border rounded-lg px-4 py-3 text-center font-medium`}
+                              ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white border-blue-600 shadow-lg scale-105' 
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:shadow-md'
+                          } border-2 rounded-lg px-4 py-3 text-center font-semibold text-sm`}
                         >
                           <input
                             type="radio"
@@ -1081,15 +1750,15 @@ export default function Home() {
                 </div>
 
                 <div className="mb-4">
-                  <div className="flex space-x-8">
+                  <div className="flex space-x-6">
                     <label className="flex items-center">
                       <input
                         type="checkbox"
                         checked={isPolNaPol}
                         onChange={(e) => setIsPolNaPol(e.target.checked)}
-                        className="mr-2"
+                        className="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                       />
-                      <span className="text-sm font-medium text-gray-700">
+                      <span className="text-sm font-semibold text-gray-800">
                         Pół na pół (+4 PLN)
                       </span>
                     </label>
@@ -1098,9 +1767,9 @@ export default function Home() {
                         type="checkbox"
                         checked={isKupony}
                         onChange={(e) => setIsKupony(e.target.checked)}
-                        className="mr-2"
+                        className="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                       />
-                      <span className="text-sm font-medium text-gray-700">
+                      <span className="text-sm font-semibold text-gray-800">
                         KUPONY
                       </span>
                     </label>
@@ -1108,24 +1777,24 @@ export default function Home() {
                 </div>
 
                 {/* Siatka pizz */}
-                {pizzasLoading && <div className="text-center py-4">Ładowanie pizz...</div>}
-                {pizzasError && <div className="text-red-500 text-center py-4">Błąd: {pizzasError.message}</div>}
+                {pizzasLoading && <div className="text-center py-3 text-gray-600 text-sm">Ładowanie pizz...</div>}
+                {pizzasError && <div className="text-red-600 font-semibold text-center py-3 text-sm">Błąd: {pizzasError.message}</div>}
                 {!pizzasLoading && !pizzasError && (!pizzas || pizzas.length === 0) && (
-                  <div className="text-center py-4 text-gray-500">Brak dostępnych pizz w bazie danych</div>
+                  <div className="text-center py-3 text-gray-500 text-sm">Brak dostępnych pizz w bazie danych</div>
                 )}
-                <div className="grid grid-cols-4 gap-4 mb-4">
+                <div className="grid grid-cols-4 gap-3 mb-4">
                   {(isKupony ? pizzas?.slice(0, 13) : pizzas?.slice(0, 40))
                     ?.map((pizza: any) => (
                       <button
                         key={pizza.id}
                         type="button"
                         onClick={() => handlePizzaSelect(pizza.id)}
-                        className={`p-4 border-2 rounded-lg text-center hover:border-blue-500 transition-colors ${
-                          selectedPizzas.has(pizza.id) || firstPizzaId === pizza.id ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+                        className={`p-3 border-2 rounded-lg text-center hover:border-blue-500 hover:shadow-md transition-all ${
+                          selectedPizzas.has(pizza.id) || firstPizzaId === pizza.id ? 'border-blue-500 bg-blue-50 shadow-md scale-105' : 'border-gray-300 bg-white'
                         }`}
                       >
-                        <div className="text-xs font-medium mb-2">{pizza.nazwa}</div>
-                        <div className="text-xs text-gray-600">
+                        <div className="text-xs font-bold mb-1 text-gray-900">{pizza.nazwa}</div>
+                        <div className="text-xs text-gray-600 font-semibold">
                           {isKupony ? (
                             currentPizzaSize === "srednia" ? "" : currentPizzaSize === "duza" ? "10 zł" : ""
                           ) : (
@@ -1141,7 +1810,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setShowAddPizza(false)}
-                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                  className="px-4 py-2 bg-gradient-to-br from-gray-600 to-gray-700 text-white font-semibold text-sm rounded-lg hover:from-gray-700 hover:to-gray-800 shadow-md hover:shadow-lg transition-all"
                 >
                   Anuluj
                 </button>
@@ -1149,78 +1818,74 @@ export default function Home() {
             )}
 
             {/* Sosy */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Sosy (2 PLN/szt)</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Sos pomidorowy
-                  </label>
-                  <div className="flex items-center gap-3">
+            <div className="bg-white p-2 rounded-lg border border-gray-300 shadow-sm">
+              <h3 className="text-xs font-bold text-gray-700 mb-1.5 uppercase">Sosy (2 PLN/szt)</h3>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-[10px] text-gray-600 mb-0.5">Sos pomidorowy</label>
+                  <div className="flex gap-0.5">
                     <button
                       type="button"
                       onClick={() => setOrderData(prev => ({
                         ...prev,
-                        sosy: { ...prev.sosy, pomidorowy: Math.max(0, prev.sosy.pomidorowy - 1) }
+                        sosy: { ...prev.sosy, pom: Math.max(0, prev.sosy.pom - 1) }
                       }))}
-                      className="w-12 h-12 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-xl font-bold text-gray-700 transition-colors"
+                      className="w-7 h-7 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded text-base font-bold text-gray-700 active:scale-95 transition-transform"
                     >
                       −
                     </button>
                     <input
                       type="number"
                       min="0"
-                      value={orderData.sosy.pomidorowy}
+                      value={orderData.sosy.pom}
                       onChange={(e) => setOrderData(prev => ({
                         ...prev,
-                        sosy: { ...prev.sosy, pomidorowy: parseInt(e.target.value) || 0 }
+                        sosy: { ...prev.sosy, pom: parseInt(e.target.value) || 0 }
                       }))}
-                      className="flex-1 p-3 border border-gray-300 rounded-md text-center font-semibold"
+                      className="w-10 h-7 px-1 border border-gray-300 rounded text-center font-bold text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
                     />
                     <button
                       type="button"
                       onClick={() => setOrderData(prev => ({
                         ...prev,
-                        sosy: { ...prev.sosy, pomidorowy: prev.sosy.pomidorowy + 1 }
+                        sosy: { ...prev.sosy, pom: prev.sosy.pom + 1 }
                       }))}
-                      className="w-12 h-12 flex items-center justify-center bg-blue-500 hover:bg-blue-600 border border-blue-500 rounded-lg text-xl font-bold text-white transition-colors"
+                      className="w-7 h-7 flex items-center justify-center bg-blue-600 hover:bg-blue-700 border border-blue-700 rounded text-base font-bold text-white active:scale-95 transition-transform"
                     >
                       +
                     </button>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Sos czosnkowy
-                  </label>
-                  <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-[10px] text-gray-600 mb-0.5">Sos czosnkowy</label>
+                  <div className="flex gap-0.5">
                     <button
                       type="button"
                       onClick={() => setOrderData(prev => ({
                         ...prev,
-                        sosy: { ...prev.sosy, czosnkowy: Math.max(0, prev.sosy.czosnkowy - 1) }
+                        sosy: { ...prev.sosy, czos: Math.max(0, prev.sosy.czos - 1) }
                       }))}
-                      className="w-12 h-12 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-xl font-bold text-gray-700 transition-colors"
+                      className="w-7 h-7 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded text-base font-bold text-gray-700 active:scale-95 transition-transform"
                     >
                       −
                     </button>
                     <input
                       type="number"
                       min="0"
-                      value={orderData.sosy.czosnkowy}
+                      value={orderData.sosy.czos}
                       onChange={(e) => setOrderData(prev => ({
                         ...prev,
-                        sosy: { ...prev.sosy, czosnkowy: parseInt(e.target.value) || 0 }
+                        sosy: { ...prev.sosy, czos: parseInt(e.target.value) || 0 }
                       }))}
-                      className="flex-1 p-3 border border-gray-300 rounded-md text-center font-semibold"
+                      className="w-10 h-7 px-1 border border-gray-300 rounded text-center font-bold text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
                     />
                     <button
                       type="button"
                       onClick={() => setOrderData(prev => ({
                         ...prev,
-                        sosy: { ...prev.sosy, czosnkowy: prev.sosy.czosnkowy + 1 }
+                        sosy: { ...prev.sosy, czos: prev.sosy.czos + 1 }
                       }))}
-                      className="w-12 h-12 flex items-center justify-center bg-blue-500 hover:bg-blue-600 border border-blue-500 rounded-lg text-xl font-bold text-white transition-colors"
+                      className="w-7 h-7 flex items-center justify-center bg-blue-600 hover:bg-blue-700 border border-blue-700 rounded text-base font-bold text-white active:scale-95 transition-transform"
                     >
                       +
                     </button>
@@ -1229,177 +1894,212 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Pozycje extra */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Pozycje extra (opcjonalnie)</h3>
-              {extraLoading && <div className="text-center py-4">Ładowanie pozycji extra...</div>}
-              {!extraLoading && (!pozycjeExtra || pozycjeExtra.length === 0) && (
-                <div className="text-center py-4 text-gray-500">Brak dostępnych pozycji extra</div>
-              )}
-              <div className="space-y-2">
-                {pozycjeExtra?.map((extra: any) => (
-                  <label key={extra.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={orderData.pozycjeExtraIds.includes(extra.id)}
-                      onChange={(e) => {
-                        setOrderData(prev => ({
-                          ...prev,
-                          pozycjeExtraIds: e.target.checked
-                            ? [...prev.pozycjeExtraIds, extra.id]
-                            : prev.pozycjeExtraIds.filter(id => id !== extra.id)
+            {/* Pozycje extra i Napoje - obok siebie */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Pozycje extra */}
+              <div className="bg-white p-2 rounded-lg border border-gray-300 shadow-sm">
+                <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase">
+                  Pozycje extra (opcjonalnie)
+                </label>
+                <div className="space-y-1.5">
+                  {orderData.pozycjeExtraIds.map((extraId, index) => {
+                    const wybranaExtra = pozycjeExtra?.find((e: any) => e.id === extraId);
+                    return (
+                      <div key={index} className="flex gap-1 items-center">
+                        <select
+                          value={extraId}
+                          onChange={(e) => {
+                            const newPozycjeExtraIds = [...orderData.pozycjeExtraIds];
+                            newPozycjeExtraIds[index] = parseInt(e.target.value);
+                            setOrderData(prev => ({ ...prev, pozycjeExtraIds: newPozycjeExtraIds }));
+                          }}
+                          className="flex-1 h-7 px-1.5 border border-gray-300 rounded text-xs font-medium focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white"
+                        >
+                          {pozycjeExtra?.map((extra: any) => (
+                            <option key={extra.id} value={extra.id}>
+                              {extra.nazwa} - {extra.cena} PLN
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newPozycjeExtraIds = orderData.pozycjeExtraIds.filter((_, i) => i !== index);
+                            setOrderData(prev => ({ ...prev, pozycjeExtraIds: newPozycjeExtraIds }));
+                          }}
+                          className="px-2 h-7 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold transition-colors active:scale-95"
+                        >
+                          Usuń
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (pozycjeExtra && pozycjeExtra.length > 0) {
+                        // Znajdź "przekładaniec" jako domyślny
+                        const przekladaniec = pozycjeExtra.find((e: any) => e.nazwa.toLowerCase().includes("przekladaniec") || e.nazwa.toLowerCase().includes("przekładaniec"));
+                        const defaultExtraId = przekladaniec ? przekladaniec.id : pozycjeExtra[0].id;
+                        setOrderData(prev => ({ 
+                          ...prev, 
+                          pozycjeExtraIds: [...prev.pozycjeExtraIds, defaultExtraId] 
                         }));
-                      }}
-                      className="mr-2"
-                    />
-                    <span>{extra.nazwa} - {extra.cena} PLN</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Napoje */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Napoje (opcjonalnie)
-              </label>
-              <div className="space-y-3">
-                {orderData.napojeIds.map((napojId, index) => {
-                  const wybranyNapoj = napoje?.find((n: any) => n.id === napojId);
-                  return (
-                    <div key={index} className="flex gap-2 items-center">
-                      <select
-                        value={napojId}
-                        onChange={(e) => {
-                          const newNapojeIds = [...orderData.napojeIds];
-                          newNapojeIds[index] = parseInt(e.target.value);
-                          setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
-                        }}
-                        className="flex-1 p-3 border border-gray-300 rounded-md"
-                      >
-                        {napoje?.map((napoj: any) => (
-                          <option key={napoj.id} value={napoj.id}>
-                            {napoj.nazwa} - {napoj.cena} PLN
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newNapojeIds = orderData.napojeIds.filter((_, i) => i !== index);
-                          setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
-                        }}
-                        className="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-md font-medium transition-colors"
-                      >
-                        Usuń
-                      </button>
-                    </div>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (napoje && napoje.length > 0) {
-                      // Znajdź napój "0,85" (priorytet) lub "85" jako domyślny
-                      const napoj085 = napoje.find((n: any) => n.nazwa.includes("0,85") || n.nazwa.includes("0.85") || (n.nazwa.includes("napoje") && n.cena === 10));
-                      const defaultNapojId = napoj085 ? napoj085.id : napoje[0].id;
-                      setOrderData(prev => ({ 
-                        ...prev, 
-                        napojeIds: [...prev.napojeIds, defaultNapojId] 
-                      }));
-                    }
-                  }}
-                  className="w-full p-3 bg-green-500 hover:bg-green-600 text-white rounded-md font-medium transition-colors"
-                >
-                  + Dodaj napój
-                </button>
-              </div>
-            </div>
-
-            {/* Płatność */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Płatność</label>
-              <div className="flex space-x-4">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="platnosc"
-                    value="gotowka"
-                    checked={orderData.platnosc === "gotowka"}
-                    onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
-                    className="mr-2"
-                  />
-                  Gotówka
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="platnosc"
-                    value="karta"
-                    checked={orderData.platnosc === "karta"}
-                    onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
-                    className="mr-2"
-                  />
-                  Karta
-                </label>
-              </div>
-            </div>
-
-            {/* Wybór kierowcy */}
-            {!sesjeLoading && aktywneSesje && aktywneSesje.length > 0 && typZamowienia === "dowoz" && (
-              <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-300">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {aktywneSesje.length === 1 ? "🚗 Kierowca:" : "🚗 Wybierz kierowcę:"}
-                </label>
-                {aktywneSesje.length === 1 ? (
-                  <div className="text-lg font-semibold text-blue-700 text-center p-2">
-                    {aktywneSesje[0].kierowca.nazwa}
-                  </div>
-                ) : (
-                  <select
-                    value={wybranaSesjaId ?? ""}
-                    onChange={(e) => setWybranaSesjaId(e.target.value ? parseInt(e.target.value) : null)}
-                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-lg"
+                      }
+                    }}
+                    className="w-full h-8 bg-green-600 hover:bg-green-700 text-white rounded font-semibold text-xs transition-colors active:scale-95"
                   >
-                    <option value="">-- Wybierz kierowcę --</option>
-                    {aktywneSesje.map((sesja: any) => (
-                      <option key={sesja.id} value={sesja.id}>
-                        {sesja.kierowca.nazwa}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {orderData.platnosc === "gotowka" && (
+                    + Dodaj pozycję extra
+                  </button>
+                </div>
+              </div>
+
+              {/* Napoje */}
+              <div className="bg-white p-2 rounded-lg border border-gray-300 shadow-sm">
+                <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase">
+                  Napoje (opcjonalnie)
+                </label>
+                <div className="space-y-1.5">
+                  {orderData.napojeIds.map((napojId, index) => {
+                    const wybranyNapoj = napoje?.find((n: any) => n.id === napojId);
+                    return (
+                      <div key={index} className="flex gap-1 items-center">
+                        <select
+                          value={napojId}
+                          onChange={(e) => {
+                            const newNapojeIds = [...orderData.napojeIds];
+                            newNapojeIds[index] = parseInt(e.target.value);
+                            setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
+                          }}
+                          className="flex-1 h-7 px-1.5 border border-gray-300 rounded text-xs font-medium focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white"
+                        >
+                          {napoje?.map((napoj: any) => (
+                            <option key={napoj.id} value={napoj.id}>
+                              {napoj.nazwa} - {napoj.cena} PLN
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newNapojeIds = orderData.napojeIds.filter((_, i) => i !== index);
+                            setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
+                          }}
+                          className="px-2 h-7 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold transition-colors active:scale-95"
+                        >
+                          Usuń
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (napoje && napoje.length > 0) {
+                        // Znajdź napój "0,85" (priorytet) lub "85" jako domyślny
+                        const napoj085 = napoje.find((n: any) => n.nazwa.includes("0,85") || n.nazwa.includes("0.85") || (n.nazwa.includes("napoje") && n.cena === 10));
+                        const defaultNapojId = napoj085 ? napoj085.id : napoje[0].id;
+                        setOrderData(prev => ({ 
+                          ...prev, 
+                          napojeIds: [...prev.napojeIds, defaultNapojId] 
+                        }));
+                      }
+                    }}
+                    className="w-full h-8 bg-green-600 hover:bg-green-700 text-white rounded font-semibold text-xs transition-colors active:scale-95"
+                  >
+                    + Dodaj napój
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Płatność i Kierowca */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Płatność */}
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border-2 border-gray-200 shadow-md">
+                <label className="block text-xs font-bold text-gray-700 mb-2 uppercase">Płatność</label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="platnosc"
+                      value="gotowka"
+                      checked={orderData.platnosc === "gotowka"}
+                      onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
+                      className="mr-2 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-semibold text-gray-800">Gotówka</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="platnosc"
+                      value="karta"
+                      checked={orderData.platnosc === "karta"}
+                      onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
+                      className="mr-2 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-semibold text-gray-800">Karta</span>
+                  </label>
+                </div>
+                {orderData.platnosc === "gotowka" && typZamowienia === "dowoz" && (
                   <p className="text-xs text-gray-600 mt-2 text-center">
-                    💰 Płatność gotówką zostanie automatycznie dodana jako wpływ do sesji kierowcy
+                    Płatność gotówką zostanie automatycznie dodana jako wpływ do sesji kierowcy
                   </p>
                 )}
               </div>
-            )}
+
+              {/* Wybór kierowcy */}
+              {!sesjeLoading && aktywneSesje && aktywneSesje.length > 0 && typZamowienia === "dowoz" && (
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border-2 border-blue-200 shadow-md">
+                  <label className="block text-xs font-bold text-gray-700 mb-2 uppercase">
+                    {aktywneSesje.length === 1 ? "Kierowca:" : "Wybierz kierowcę:"}
+                  </label>
+                  {aktywneSesje.length === 1 ? (
+                    <div className="text-lg font-bold text-blue-800 text-center p-3 bg-white rounded-lg">
+                      {aktywneSesje[0].kierowca.nazwa}
+                    </div>
+                  ) : (
+                    <select
+                      value={wybranaSesjaId ?? ""}
+                      onChange={(e) => setWybranaSesjaId(e.target.value ? parseInt(e.target.value) : null)}
+                      className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none text-base bg-white"
+                    >
+                      <option value="">-- Wybierz kierowcę --</option>
+                      {aktywneSesje.map((sesja: any) => (
+                        <option key={sesja.id} value={sesja.id}>
+                          {sesja.kierowca.nazwa}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Podsumowanie ceny */}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-xl font-bold text-center">
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border-2 border-gray-200 shadow-md">
+              <div className="text-2xl font-extrabold text-center text-gray-900">
                 Cena całkowita: {totalPrice.toFixed(2)} PLN
               </div>
             </div>
 
             {/* Przyciski akcji */}
-            <div className="space-y-3">
+            <div className="space-y-3 pt-3">
               <button
                 type="submit"
                 disabled={placeOrderMutation.isLoading || orderData.pizze.length === 0}
-                className="w-full bg-green-600 text-white py-4 px-6 rounded-lg text-lg font-semibold hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-4 px-6 rounded-xl text-base font-bold hover:from-green-700 hover:to-green-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transition-all"
               >
-                {placeOrderMutation.isLoading ? "Składanie zamówienia..." : "🍕 Złóż zamówienie"}
+                {placeOrderMutation.isLoading ? "Składanie zamówienia..." : "Złóż zamówienie"}
               </button>
               
               <button
                 type="button"
                 onClick={resetForm}
-                className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
+                className="w-full bg-gray-500 text-white py-3 px-6 rounded-xl hover:bg-gray-600 font-semibold text-sm transition-all"
               >
-                🗑️ Wyczyść formularz
+                Wyczyść formularz
               </button>
             </div>
           </form>

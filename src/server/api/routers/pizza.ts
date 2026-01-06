@@ -197,8 +197,8 @@ export const pizzaRouter = createTRPCRouter({
           })
         ),
         sosy: z.object({
-          pomidorowy: z.number().min(0),
-          czosnkowy: z.number().min(0),
+          pom: z.number().min(0),
+          czos: z.number().min(0),
         }),
         napojeIds: z.array(z.number()).optional(),
         pozycjeExtraIds: z.array(z.number()).optional(),
@@ -320,7 +320,7 @@ export const pizzaRouter = createTRPCRouter({
       }
 
       // Cena sosów (2 PLN za sztukę)
-      totalPrice += (input.sosy.pomidorowy + input.sosy.czosnkowy) * 2;
+      totalPrice += (input.sosy.pom + input.sosy.czos) * 2;
 
       // Cena napojów
       console.log("Napoje IDs:", input.napojeIds);
@@ -407,8 +407,8 @@ export const pizzaRouter = createTRPCRouter({
           })
         ),
         sosy: z.object({
-          pomidorowy: z.number().min(0),
-          czosnkowy: z.number().min(0),
+          pom: z.number().min(0),
+          czos: z.number().min(0),
         }),
         napojeIds: z.array(z.number()).optional(),
         pozycjeExtraIds: z.array(z.number()).optional(),
@@ -547,7 +547,7 @@ export const pizzaRouter = createTRPCRouter({
         }
 
         // Cena sosów
-        totalPrice += (input.sosy.pomidorowy + input.sosy.czosnkowy) * 2;
+        totalPrice += (input.sosy.pom + input.sosy.czos) * 2;
 
         // Cena napojów
         console.log("CreateOrder - Napoje IDs:", input.napojeIds);
@@ -621,6 +621,8 @@ export const pizzaRouter = createTRPCRouter({
 
       // Zapisujemy zamówienie bezpośrednio do tabeli przez raw SQL
       console.log("Zapisywanie zamówienia do bazy...");
+      console.log("Sosy przed zapisem do DB:", input.sosy);
+      console.log("Sosy JSON:", JSON.stringify(input.sosy));
       
       // Zapisz do tabeli zamowienia z nową strukturą
       // Używamy NOW() dla MariaDB/MySQL
