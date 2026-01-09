@@ -237,11 +237,11 @@ export default function Home() {
           const modsByName: Record<string, number> = {};
           
           // Pobierz definicję pizzy z bazy aby znać bazowe składniki
-          const pizzaDef = pizzas?.find(p => p.id === pizza.id);
+          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
           
           Object.entries(pizza.modifications).forEach(([skladnikIdStr, change]) => {
             const skladnikId = parseInt(skladnikIdStr);
-            const skladnik = skladniki?.find(s => s.id === skladnikId);
+            const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
             if (skladnik) {
               // Sprawdź czy składnik jest bazowy w tej pizzy
               const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
@@ -468,7 +468,7 @@ export default function Home() {
 
       // Sprawdź czy nie schodzimy poniżej 0 (baza + modyfikacja >= 0)
       // Musimy znaleźć bazową ilość tego składnika w pizzy
-      const pizzaDef = pizzas?.find(p => p.id === pizza.id);
+      const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
       const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === ingredientId);
       const baseCount = isBase ? 1 : 0; // Zakładamy 1 sztukę w bazie
 
@@ -508,7 +508,7 @@ export default function Home() {
         } else if (change > 0) {
           // Dodanie
           // Sprawdź czy był w bazie
-          const pizzaDef = pizzas?.find(p => p.id === pizza.id);
+          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
           const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
           
           if (isBase) {
@@ -566,11 +566,11 @@ export default function Home() {
       orderData.pizze.forEach((pizza, index) => {
         if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
           const modsByName: Record<string, number> = {};
-          const pizzaDef = pizzas?.find(p => p.id === pizza.id);
+          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
           
           Object.entries(pizza.modifications).forEach(([skladnikIdStr, change]) => {
             const skladnikId = parseInt(skladnikIdStr);
-            const skladnik = skladniki?.find(s => s.id === skladnikId);
+            const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
             if (skladnik) {
               const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
               const baseCount = isBase ? 1 : 0;
@@ -1628,13 +1628,13 @@ export default function Home() {
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                         {skladniki?.map((skladnik: any) => {
                           // Sprawdź czy składnik jest w bazie pierwszej pizzy
-                          const pizzaDef = pizzas?.find(p => p.id === pizza.id);
+                          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
                           const isBaseInFirst = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id);
                           
                           // Sprawdź czy składnik jest w bazie drugiej pizzy (dla pół na pół)
                           let isBaseInSecond = false;
                           if (pizza.polNaPol) {
-                            const pizzaDef2 = pizzas?.find(p => p.id === pizza.polNaPol?.id);
+                            const pizzaDef2 = pizzas?.find((p: any) => p.id === pizza.polNaPol?.id);
                             isBaseInSecond = pizzaDef2?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id) || false;
                           }
                           

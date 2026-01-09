@@ -78,8 +78,8 @@ async function main() {
     "Krótka", "Nowa", "Stara", "Zielona", "Niebieska"
   ];
 
-  for (const ulica of ulice) {
-    await prisma.ulica.create({ data: { nazwa: ulica } });
+  for (const ulicaNazwa of ulice) {
+    await prisma.ulica.create({ data: { ulica: ulicaNazwa } });
   }
 
   // Dodaj pozycje extra

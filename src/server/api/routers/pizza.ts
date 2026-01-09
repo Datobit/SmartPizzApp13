@@ -57,8 +57,8 @@ export const pizzaRouter = createTRPCRouter({
     });
     
     // Przelicz aktualne saldo z transakcji
-    const sesjeZSaldem = sesje.map(sesja => {
-      const saldo = sesja.transakcje.reduce((sum, t) => {
+    const sesjeZSaldem = sesje.map((sesja: any) => {
+      const saldo = sesja.transakcje.reduce((sum: number, t: any) => {
         return sum + (t.typ === 'wplyw' ? Number(t.kwota) : -Number(t.kwota));
       }, 0);
       
@@ -95,7 +95,7 @@ export const pizzaRouter = createTRPCRouter({
       });
       
       // Sortujemy: najpierw ulice zaczynające się od wpisanej frazy, potem pozostałe
-      const sorted = ulice.sort((a, b) => {
+      const sorted = ulice.sort((a: any, b: any) => {
         const aStartsWith = a.ulica?.toLowerCase().startsWith(input.query.toLowerCase()) ?? false;
         const bStartsWith = b.ulica?.toLowerCase().startsWith(input.query.toLowerCase()) ?? false;
         
@@ -215,6 +215,8 @@ export const pizzaRouter = createTRPCRouter({
       // Cena pizz
       for (let i = 0; i < input.pizze.length; i++) {
         const pizza = input.pizze[i];
+        if (!pizza) continue;
+        
         const pizzaData = await db.pizza.findUnique({
           where: { id: pizza.id },
           include: {
@@ -256,7 +258,7 @@ export const pizzaRouter = createTRPCRouter({
             if (modyfikacje) {
               // Pobierz bazowe składniki tej pizzy
               const bazoweSkladniki: Record<string, number> = {};
-              pizzaData.skladniki.forEach(ps => {
+              pizzaData.skladniki.forEach((ps: any) => {
                 bazoweSkladniki[ps.skladnik.nazwa] = 1; // Domyślnie 1x składnik
               });
               
