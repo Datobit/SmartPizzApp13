@@ -3,7 +3,7 @@ import sqlite3 from 'sqlite3';
 const db = new sqlite3.Database('./smartpizzapp13-T3.db');
 
 db.serialize(() => {
-  console.log('🔍 Sprawdzam indeksy i constrainty tabeli Zamówienia:');
+  console.log('[SZUKAM] Sprawdzam indeksy i constrainty tabeli Zamówienia:');
   
   // Indeksy
   db.all("PRAGMA index_list(Zamówienia)", (err, indexes) => {

@@ -27,10 +27,10 @@ async function testDirectInsert() {
       'mala'
     );
     
-    console.log('✅ Test 1 udany:', result1);
+    console.log(' Test 1 udany:', result1);
     
   } catch (error1) {
-    console.log('❌ Test 1 nieudany:', error1.message);
+    console.log(' Test 1 nieudany:', error1.message);
     
     try {
       // Test 2: Backticks
@@ -54,10 +54,10 @@ async function testDirectInsert() {
         'mala'
       );
       
-      console.log('✅ Test 2 udany:', result2);
+      console.log(' Test 2 udany:', result2);
       
     } catch (error2) {
-      console.log('❌ Test 2 nieudany:', error2.message);
+      console.log(' Test 2 nieudany:', error2.message);
       
       try {
         // Test 3: Bez cudzysłowów
@@ -81,10 +81,10 @@ async function testDirectInsert() {
           'mala'
         );
         
-        console.log('✅ Test 3 udany:', result3);
+        console.log(' Test 3 udany:', result3);
         
       } catch (error3) {
-        console.log('❌ Test 3 nieudany:', error3.message);
+        console.log(' Test 3 nieudany:', error3.message);
       }
     }
   }

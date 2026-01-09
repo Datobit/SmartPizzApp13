@@ -19,13 +19,13 @@ async function importCSV() {
   });
 
   try {
-    console.log('🔌 Połączono z bazą danych\n');
+    console.log('[CONNECT] Połączono z bazą danych\n');
 
     // Wyłącz foreign key checks
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
 
     // Wyczyść istniejące dane
-    console.log('🧹 Czyszczenie tabel...');
+    console.log('[CLEAN] Czyszczenie tabel...');
     await connection.query('TRUNCATE TABLE zamowienia');
     await connection.query('TRUNCATE TABLE transakcje');
     await connection.query('TRUNCATE TABLE sesje');
@@ -37,12 +37,12 @@ async function importCSV() {
     await connection.query('TRUNCATE TABLE ulice');
     await connection.query('TRUNCATE TABLE dzielnice');
     await connection.query('TRUNCATE TABLE kierowcy');
-    console.log('✅ Tabele wyczyszczone\n');
+    console.log(' Tabele wyczyszczone\n');
 
     const csvDir = path.join(__dirname, 'csv-export');
 
     // 1. Importuj dzielnice
-    console.log('📥 Importowanie dzielnic...');
+    console.log('[IMPORT] Importowanie dzielnic...');
     const dzielnice = fs.readFileSync(path.join(csvDir, 'dzielnice.csv'), 'utf-8')
       .split('\n')
       .slice(1)
@@ -55,10 +55,10 @@ async function importCSV() {
     for (const [id, cena] of dzielnice) {
       await connection.query('INSERT INTO dzielnice (id, cena_dzielnica) VALUES (?, ?)', [id, cena]);
     }
-    console.log(`✅ Zaimportowano ${dzielnice.length} dzielnic\n`);
+    console.log(` Zaimportowano ${dzielnice.length} dzielnic\n`);
 
     // 2. Importuj kierowców
-    console.log('📥 Importowanie kierowców...');
+    console.log('[IMPORT] Importowanie kierowców...');
     const kierowcy = fs.readFileSync(path.join(csvDir, 'kierowcy.csv'), 'utf-8')
       .split('\n')
       .slice(1)
@@ -71,10 +71,10 @@ async function importCSV() {
     for (const [id, nazwa] of kierowcy) {
       await connection.query('INSERT INTO kierowcy (id, nazwa) VALUES (?, ?)', [id, nazwa]);
     }
-    console.log(`✅ Zaimportowano ${kierowcy.length} kierowców\n`);
+    console.log(` Zaimportowano ${kierowcy.length} kierowców\n`);
 
     // 3. Importuj ulice
-    console.log('📥 Importowanie ulic...');
+    console.log('[IMPORT] Importowanie ulic...');
     const uliceContent = fs.readFileSync(path.join(csvDir, 'ulica.csv'), 'utf-8');
     const uliceLines = uliceContent.split('\n').slice(1).filter(line => line.trim());
     
@@ -99,10 +99,10 @@ async function importCSV() {
         uliceCount++;
       }
     }
-    console.log(`✅ Zaimportowano ${uliceCount} ulic\n`);
+    console.log(` Zaimportowano ${uliceCount} ulic\n`);
 
     // 4. Importuj pizze
-    console.log('📥 Importowanie pizz...');
+    console.log('[IMPORT] Importowanie pizz...');
     const pizze = fs.readFileSync(path.join(csvDir, 'menu_pizza.csv'), 'utf-8')
       .split('\n')
       .slice(1)
@@ -118,10 +118,10 @@ async function importCSV() {
         [id, nazwa, cena_mala, cena_srednia, cena_duza]
       );
     }
-    console.log(`✅ Zaimportowano ${pizze.length} pizz\n`);
+    console.log(` Zaimportowano ${pizze.length} pizz\n`);
 
     // 5. Importuj składniki
-    console.log('📥 Importowanie składników...');
+    console.log('[IMPORT] Importowanie składników...');
     const skladniki = fs.readFileSync(path.join(csvDir, 'skladniki.csv'), 'utf-8')
       .split('\n')
       .slice(1)
@@ -137,10 +137,10 @@ async function importCSV() {
         [id, nazwa, cena_srednia, cena_duza]
       );
     }
-    console.log(`✅ Zaimportowano ${skladniki.length} składników\n`);
+    console.log(` Zaimportowano ${skladniki.length} składników\n`);
 
     // 6. Importuj relacje pizza-składnik
-    console.log('📥 Importowanie relacji pizza-składnik...');
+    console.log('[IMPORT] Importowanie relacji pizza-składnik...');
     const pizzaSkladnik = fs.readFileSync(path.join(csvDir, 'pizza_skladnik.csv'), 'utf-8')
       .split('\n')
       .slice(1)
@@ -156,10 +156,10 @@ async function importCSV() {
         [id_pizza, id_skladnik]
       );
     }
-    console.log(`✅ Zaimportowano ${pizzaSkladnik.length} relacji pizza-składnik\n`);
+    console.log(` Zaimportowano ${pizzaSkladnik.length} relacji pizza-składnik\n`);
 
     // 7. Importuj napoje
-    console.log('📥 Importowanie napojów...');
+    console.log('[IMPORT] Importowanie napojów...');
     const napoje = fs.readFileSync(path.join(csvDir, 'napoje.csv'), 'utf-8')
       .split('\n')
       .slice(1)
@@ -175,10 +175,10 @@ async function importCSV() {
         [id, nazwa, cena]
       );
     }
-    console.log(`✅ Zaimportowano ${napoje.length} napojów\n`);
+    console.log(` Zaimportowano ${napoje.length} napojów\n`);
 
     // 8. Importuj pozycje extra
-    console.log('📥 Importowanie pozycji extra...');
+    console.log('[IMPORT] Importowanie pozycji extra...');
     await connection.query('TRUNCATE TABLE pozycje_extra'); // Wyczyść wcześniej dodane
     const pozycjeExtra = fs.readFileSync(path.join(csvDir, 'pozycje_extra.csv'), 'utf-8')
       .split('\n')
@@ -195,10 +195,10 @@ async function importCSV() {
         [id, nazwa, cena]
       );
     }
-    console.log(`✅ Zaimportowano ${pozycjeExtra.length} pozycji extra\n`);
+    console.log(` Zaimportowano ${pozycjeExtra.length} pozycji extra\n`);
 
     // 9. Importuj sesje
-    console.log('📥 Importowanie sesji...');
+    console.log('[IMPORT] Importowanie sesji...');
     const sesjeContent = fs.readFileSync(path.join(csvDir, 'sesje.csv'), 'utf-8');
     const sesjeLines = sesjeContent.split('\n').slice(1).filter(line => line.trim());
     
@@ -245,10 +245,10 @@ async function importCSV() {
         sesjeCount++;
       }
     }
-    console.log(`✅ Zaimportowano ${sesjeCount} sesji\n`);
+    console.log(` Zaimportowano ${sesjeCount} sesji\n`);
 
     // 10. Importuj transakcje
-    console.log('📥 Importowanie transakcji...');
+    console.log('[IMPORT] Importowanie transakcji...');
     const transakcjeContent = fs.readFileSync(path.join(csvDir, 'transakcje.csv'), 'utf-8');
     const transakcjeLines = transakcjeContent.split('\n').slice(1).filter(line => line.trim());
     
@@ -294,10 +294,10 @@ async function importCSV() {
         transakcjeCount++;
       }
     }
-    console.log(`✅ Zaimportowano ${transakcjeCount} transakcji\n`);
+    console.log(` Zaimportowano ${transakcjeCount} transakcji\n`);
 
     // 11. Importuj zamówienia
-    console.log('📥 Importowanie zamówień...');
+    console.log('[IMPORT] Importowanie zamówień...');
     const zamowieniaContent = fs.readFileSync(path.join(csvDir, 'zamowienia.csv'), 'utf-8');
     const zamowieniaLines = zamowieniaContent.split('\n').slice(1).filter(line => line.trim());
     
@@ -352,13 +352,13 @@ async function importCSV() {
         zamowieniaCount++;
       }
     }
-    console.log(`✅ Zaimportowano ${zamowieniaCount} zamówień\n`);
+    console.log(` Zaimportowano ${zamowieniaCount} zamówień\n`);
 
     // Włącz z powrotem foreign key checks
     await connection.query('SET FOREIGN_KEY_CHECKS = 1');
 
-    console.log('🎉 Import zakończony pomyślnie!');
-    console.log('\n📊 Podsumowanie:');
+    console.log(' Import zakończony pomyślnie!');
+    console.log('\n[STATS] Podsumowanie:');
     console.log(`- Dzielnice: ${dzielnice.length}`);
     console.log(`- Kierowcy: ${kierowcy.length}`);
     console.log(`- Ulice: ${uliceCount}`);
@@ -372,7 +372,7 @@ async function importCSV() {
     console.log(`- Zamówienia: ${zamowieniaCount}`);
 
   } catch (error) {
-    console.error('❌ Błąd podczas importu:', error);
+    console.error(' Błąd podczas importu:', error);
   } finally {
     await connection.end();
   }

@@ -12,23 +12,23 @@ try {
     console.log(`   Hex: ${Buffer.from(table.name, 'utf8').toString('hex')}`);
     
     if (table.name.toLowerCase().includes('zamów') || table.name === 'Zamówienia') {
-      console.log('   ✅ TO JEST TABELA ZAMÓWIEŃ!');
+      console.log('    TO JEST TABELA ZAMÓWIEŃ!');
       
       // Test czy możemy do niej pisać
       try {
         const testQuery = `SELECT COUNT(*) as count FROM "${table.name}"`;
         const result = db.prepare(testQuery).get();
-        console.log(`   📊 Liczba rekordów: ${result.count}`);
+        console.log(`   [STATS] Liczba rekordów: ${result.count}`);
         
         // Test struktury
         const structure = db.prepare(`PRAGMA table_info("${table.name}")`).all();
-        console.log('   📋 Kolumny:');
+        console.log('   [LISTA] Kolumny:');
         structure.forEach(col => {
           console.log(`      - ${col.name}: ${col.type}`);
         });
         
       } catch (queryError) {
-        console.log(`   ❌ Błąd zapytania: ${queryError.message}`);
+        console.log(`    Błąd zapytania: ${queryError.message}`);
       }
     }
     console.log('');

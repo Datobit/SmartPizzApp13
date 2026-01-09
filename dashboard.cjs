@@ -273,12 +273,12 @@ const server = http.createServer(async (req, res) => {
 </head>
 <body>
   <div class="container">
-    <h1>🍕 Dashboard Analytics</h1>
+    <h1> Dashboard Analytics</h1>
     
     <!-- KPI Section -->
     <div class="kpi-section">
       <div class="kpi-header">
-        <h2>📊 Wyniki Sprzedaży</h2>
+        <h2>[STATS] Wyniki Sprzedaży</h2>
         <select id="kpiRange" class="range-selector" onchange="updateKPI()">
           <option value="7">Ostatnie 7 dni</option>
           <option value="30" selected>Ostatnie 30 dni</option>
@@ -294,7 +294,7 @@ const server = http.createServer(async (req, res) => {
     <!-- KPI Na Miejscu -->
     <div class="kpi-section">
       <div class="kpi-header">
-        <h2>🏪 Sprzedaż NA MIEJSCU</h2>
+        <h2> Sprzedaż NA MIEJSCU</h2>
         <select id="naMiejscuRange" class="range-selector" onchange="updateNaMiejscuKPI()">
           <option value="7">Ostatnie 7 dni</option>
           <option value="30" selected>Ostatnie 30 dni</option>
@@ -310,7 +310,7 @@ const server = http.createServer(async (req, res) => {
     <!-- KPI Na Wynos -->
     <div class="kpi-section">
       <div class="kpi-header">
-        <h2>📦 Sprzedaż NA WYNOS</h2>
+        <h2> Sprzedaż NA WYNOS</h2>
         <select id="naWynosRange" class="range-selector" onchange="updateNaWynosKPI()">
           <option value="7">Ostatnie 7 dni</option>
           <option value="30" selected>Ostatnie 30 dni</option>
@@ -326,7 +326,7 @@ const server = http.createServer(async (req, res) => {
     <!-- KPI Dowóz -->
     <div class="kpi-section">
       <div class="kpi-header">
-        <h2>🚗 Sprzedaż DOWÓZ</h2>
+        <h2> Sprzedaż DOWÓZ</h2>
         <select id="dowozRange" class="range-selector" onchange="updateDowozKPI()">
           <option value="7">Ostatnie 7 dni</option>
           <option value="30" selected>Ostatnie 30 dni</option>
@@ -360,7 +360,7 @@ const server = http.createServer(async (req, res) => {
     <!-- Pizza Pie Chart Section -->
     <div class="chart-section">
       <div class="chart-header">
-        <h2>🍕 Najpopularniejsze Pizze</h2>
+        <h2> Najpopularniejsze Pizze</h2>
         <select id="pizzaRange" class="range-selector" onchange="updatePizzaChart()">
           <option value="1">Dzisiaj</option>
           <option value="7">Ostatnie 7 dni</option>
@@ -433,12 +433,12 @@ const server = http.createServer(async (req, res) => {
         <div class="kpi-card">
           <div class="kpi-label">Dzisiaj</div>
           <div class="kpi-value">\${data.today.toFixed(2)} PLN</div>
-          <div class="kpi-comparison">\${data.today > 0 ? '🟢 Aktywny' : '⚪ Brak zamówień'}</div>
+          <div class="kpi-comparison">\${data.today > 0 ? '[OK] Aktywny' : ' Brak zamówień'}</div>
         </div>
         <div class="kpi-card \${isPositive ? 'kpi-positive' : 'kpi-negative'}">
           <div class="kpi-label">Porównanie do średniej (\${range} dni)</div>
           <div class="kpi-value">\${isPositive ? '+' : ''}\${difference.toFixed(2)} PLN</div>
-          <div class="kpi-comparison">\${isPositive ? '📈' : '📉'} \${percentChange.toFixed(1)}%</div>
+          <div class="kpi-comparison">\${isPositive ? '' : ''} \${percentChange.toFixed(1)}%</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Średnia dzienna (\${range} dni)</div>
@@ -471,12 +471,12 @@ const server = http.createServer(async (req, res) => {
         <div class="kpi-card">
           <div class="kpi-label">Dzisiaj (NA MIEJSCU)</div>
           <div class="kpi-value">\${data.naMiejscu.today.toFixed(2)} PLN</div>
-          <div class="kpi-comparison">🏪 Zamówienia lokalne</div>
+          <div class="kpi-comparison"> Zamówienia lokalne</div>
         </div>
         <div class="kpi-card \${isPositive ? 'kpi-positive' : 'kpi-negative'}">
           <div class="kpi-label">Porównanie do średniej (\${range} dni)</div>
           <div class="kpi-value">\${isPositive ? '+' : ''}\${difference.toFixed(2)} PLN</div>
-          <div class="kpi-comparison">\${isPositive ? '📈' : '📉'} \${percentChange.toFixed(1)}%</div>
+          <div class="kpi-comparison">\${isPositive ? '' : ''} \${percentChange.toFixed(1)}%</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Średnia dzienna (\${range} dni)</div>
@@ -505,12 +505,12 @@ const server = http.createServer(async (req, res) => {
         <div class="kpi-card">
           <div class="kpi-label">Dzisiaj (NA WYNOS)</div>
           <div class="kpi-value">\${data.naWynos.today.toFixed(2)} PLN</div>
-          <div class="kpi-comparison">📦 Odbiór osobisty</div>
+          <div class="kpi-comparison"> Odbiór osobisty</div>
         </div>
         <div class="kpi-card \${isPositive ? 'kpi-positive' : 'kpi-negative'}">
           <div class="kpi-label">Porównanie do średniej (\${range} dni)</div>
           <div class="kpi-value">\${isPositive ? '+' : ''}\${difference.toFixed(2)} PLN</div>
-          <div class="kpi-comparison">\${isPositive ? '📈' : '📉'} \${percentChange.toFixed(1)}%</div>
+          <div class="kpi-comparison">\${isPositive ? '' : ''} \${percentChange.toFixed(1)}%</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Średnia dzienna (\${range} dni)</div>
@@ -539,12 +539,12 @@ const server = http.createServer(async (req, res) => {
         <div class="kpi-card">
           <div class="kpi-label">Dzisiaj (DOWÓZ)</div>
           <div class="kpi-value">\${data.dowoz.today.toFixed(2)} PLN</div>
-          <div class="kpi-comparison">🚗 Dostawa do klienta</div>
+          <div class="kpi-comparison"> Dostawa do klienta</div>
         </div>
         <div class="kpi-card \${isPositive ? 'kpi-positive' : 'kpi-negative'}">
           <div class="kpi-label">Porównanie do średniej (\${range} dni)</div>
           <div class="kpi-value">\${isPositive ? '+' : ''}\${difference.toFixed(2)} PLN</div>
-          <div class="kpi-comparison">\${isPositive ? '📈' : '📉'} \${percentChange.toFixed(1)}%</div>
+          <div class="kpi-comparison">\${isPositive ? '' : ''} \${percentChange.toFixed(1)}%</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Średnia dzienna (\${range} dni)</div>
@@ -770,5 +770,5 @@ const server = http.createServer(async (req, res) => {
 
 const PORT = 3007;
 server.listen(PORT, () => {
-  console.log(`📊 Dashboard działa na http://localhost:${PORT}`);
+  console.log(`[STATS] Dashboard działa na http://localhost:${PORT}`);
 });

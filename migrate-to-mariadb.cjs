@@ -12,7 +12,7 @@ const outputFile = path.join(__dirname, 'migration-data.sql');
 
 const db = new sqlite3.Database(sqliteDbPath);
 
-console.log('🔄 Rozpoczynam eksport danych z SQLite...\n');
+console.log('[RELOAD] Rozpoczynam eksport danych z SQLite...\n');
 
 // SQL dla MariaDB
 let sqlOutput = `-- Migracja danych z SQLite do MariaDB
@@ -38,20 +38,20 @@ let processedTables = 0;
 tables.forEach((tableName) => {
   db.all(`SELECT * FROM ${tableName}`, [], (err, rows) => {
     if (err) {
-      console.error(`❌ Błąd przy eksporcie tabeli ${tableName}:`, err.message);
+      console.error(` Błąd przy eksporcie tabeli ${tableName}:`, err.message);
       processedTables++;
       checkCompletion();
       return;
     }
 
     if (rows.length === 0) {
-      console.log(`⚠️  Tabela ${tableName} jest pusta`);
+      console.log(`  Tabela ${tableName} jest pusta`);
       processedTables++;
       checkCompletion();
       return;
     }
 
-    console.log(`✅ Eksportowano ${rows.length} wierszy z tabeli ${tableName}`);
+    console.log(` Eksportowano ${rows.length} wierszy z tabeli ${tableName}`);
 
     // Wyczyść tabelę przed insertem
     sqlOutput += `\n-- Tabela: ${tableName}\n`;
@@ -82,9 +82,9 @@ function checkCompletion() {
     
     fs.writeFileSync(outputFile, sqlOutput, 'utf8');
     
-    console.log('\n✅ Eksport zakończony pomyślnie!');
-    console.log(`📄 Plik SQL zapisany jako: ${outputFile}`);
-    console.log('\n📋 Kolejne kroki:');
+    console.log('\n Eksport zakończony pomyślnie!');
+    console.log(` Plik SQL zapisany jako: ${outputFile}`);
+    console.log('\n[LISTA] Kolejne kroki:');
     console.log('1. Upewnij się, że MariaDB jest uruchomiona');
     console.log('2. Utwórz bazę danych: CREATE DATABASE SmartPizzApp13;');
     console.log('3. Uruchom migrację Prisma: npx prisma db push');

@@ -1,0 +1,9 @@
+nohup: ignoring input
+[dotenv@17.2.3] injecting env (2) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+Serwer zamowien dziala na http://localhost:3006
+(node:15280) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Drukowanie na: /dev/usb/lp0
+ Wydrukowano paragon dla zamówienia #127
+Drukowanie na: /dev/usb/lp0
+ Wydrukowano paragon dla zamówienia #128

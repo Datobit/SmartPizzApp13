@@ -402,7 +402,7 @@ export default function Home() {
     }));
 
     setSelectedPizzas(new Set());
-    setCurrentPizzaSize("mala");
+    setCurrentPizzaSize("duza");
     setShowAddPizza(false);
   };
 
@@ -615,18 +615,18 @@ export default function Home() {
       console.log("Wynik zamówienia:", result);
       
       if (result && result.success) {
-        alert(`✅ Zamówienie złożone pomyślnie! Cena: ${result.cenaCalkwita} PLN`);
+        alert(` Zamówienie złożone pomyślnie! Cena: ${result.cenaCalkwita} PLN`);
         resetForm();
       } else {
-        alert("❌ Błąd podczas składania zamówienia");
+        alert(" Błąd podczas składania zamówienia");
       }
       
     } catch (error) {
       console.error("Szczegółowy błąd zamówienia:", error);
       if (error instanceof Error) {
-        alert(`❌ Błąd: ${error.message}`);
+        alert(` Błąd: ${error.message}`);
       } else {
-        alert("❌ Błąd podczas składania zamówienia. Spróbuj ponownie.");
+        alert(" Błąd podczas składania zamówienia. Spróbuj ponownie.");
       }
     }
   };
@@ -645,12 +645,20 @@ export default function Home() {
             <h1 className="text-4xl font-black text-gray-900 tracking-tight" style={{ marginLeft: '30px' }}>
               SmartPizzApp
             </h1>
-            <a
-              href="http://localhost:3006"
-              className="bg-gradient-to-r from-orange-600 to-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold hover:from-orange-700 hover:to-orange-800 shadow-lg hover:shadow-xl transition-all"
-            >
-              Orders Viewer
-            </a>
+            <div className="flex gap-2">
+              <a
+                href="http://localhost:3006"
+                className="bg-gradient-to-r from-orange-600 to-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold hover:from-orange-700 hover:to-orange-800 shadow-lg hover:shadow-xl transition-all"
+              >
+                Orders Viewer
+              </a>
+              <a
+                href="http://localhost:3006/kuchnia"
+                className="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold hover:from-purple-700 hover:to-purple-800 shadow-lg hover:shadow-xl transition-all"
+              >
+                🍳 Kuchnia
+              </a>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded-xl shadow-xl border border-gray-100">
@@ -712,12 +720,17 @@ export default function Home() {
                     const cleanedValue = e.target.value.replace(/\s/g, '');
                     setOrderData(prev => ({ ...prev, telefon: cleanedValue }));
                   }}
-                  onFocus={() => {
+                  onFocus={(e) => {
                     if (!showKeyboard || activeInputRef?.current !== telefonInputRef.current) {
                       setActiveInputRef(telefonInputRef);
                       setKeyboardType('numeric');
                       setShowKeyboard(true);
                     }
+                    // Ustaw kursor na końcu tekstu
+                    const input = e.target;
+                    setTimeout(() => {
+                      input.setSelectionRange(input.value.length, input.value.length);
+                    }, 0);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -774,12 +787,17 @@ export default function Home() {
                       type="text"
                       value={dodatkoweInfo}
                       onChange={(e) => setDodatkoweInfo(e.target.value)}
-                      onFocus={() => {
+                      onFocus={(e) => {
                         if (!showKeyboard || activeInputRef?.current !== dodatkoweInfoInputRef.current) {
                           setActiveInputRef(dodatkoweInfoInputRef);
                           setKeyboardType('text');
                           setShowKeyboard(true);
                         }
+                        // Ustaw kursor na końcu tekstu
+                        const input = e.target;
+                        setTimeout(() => {
+                          input.setSelectionRange(input.value.length, input.value.length);
+                        }, 0);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -813,12 +831,17 @@ export default function Home() {
                             setShowSuggestions(true);
                           }
                         }}
-                        onFocus={() => {
+                        onFocus={(e) => {
                           if (!showKeyboard || activeInputRef?.current !== ulicaInputRef.current) {
                             setActiveInputRef(ulicaInputRef);
                             setKeyboardType('text');
                             setShowKeyboard(true);
                           }
+                          // Ustaw kursor na końcu tekstu
+                          const input = e.target;
+                          setTimeout(() => {
+                            input.setSelectionRange(input.value.length, input.value.length);
+                          }, 0);
                           // Nie pokazuj sugestii automatycznie przy fokusie - tylko przy edycji
                         }}
                         onBlur={() => {
@@ -908,12 +931,17 @@ export default function Home() {
                           setMiejscowosc("");
                           setUserManuallyChangedDzielnica(false);
                         }}
-                        onFocus={() => {
+                        onFocus={(e) => {
                           if (!showKeyboard || activeInputRef?.current !== numerDomuInputRef.current) {
                             setActiveInputRef(numerDomuInputRef);
                             setKeyboardType('text');
                             setShowKeyboard(true);
                           }
+                          // Ustaw kursor na końcu tekstu
+                          const input = e.target;
+                          setTimeout(() => {
+                            input.setSelectionRange(input.value.length, input.value.length);
+                          }, 0);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -933,12 +961,17 @@ export default function Home() {
                         type="text"
                         value={numerMieszkania}
                         onChange={(e) => setNumerMieszkania(e.target.value)}
-                        onFocus={() => {
+                        onFocus={(e) => {
                           if (!showKeyboard || activeInputRef?.current !== mieszkanieInputRef.current) {
                             setActiveInputRef(mieszkanieInputRef);
                             setKeyboardType('text');
                             setShowKeyboard(true);
                           }
+                          // Ustaw kursor na końcu tekstu
+                          const input = e.target;
+                          setTimeout(() => {
+                            input.setSelectionRange(input.value.length, input.value.length);
+                          }, 0);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -964,7 +997,7 @@ export default function Home() {
                         }}
                         className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-500"
                       >
-                        ✕
+                        
                       </button>
                     </div>
                     
@@ -1315,7 +1348,7 @@ export default function Home() {
                             }}
                             className={`bg-gray-600 text-white p-2 rounded-lg text-lg hover:bg-gray-500 ${capsLock ? 'bg-teal-600' : ''}`}
                           >
-                            ⬆
+                            
                           </button>
                           {['Z', 'X', 'C', 'V', 'B', 'N', 'M'].map((key) => (
                             <button
@@ -1385,7 +1418,7 @@ export default function Home() {
                             }}
                             className="col-span-2 bg-gray-600 text-white p-2 rounded-lg text-lg hover:bg-gray-500"
                           >
-                            ✕
+                            
                           </button>
                         </div>
                         
@@ -1547,7 +1580,7 @@ export default function Home() {
                     {/* Ostrzeżenie gdy adres nie został rozpoznany */}
                     {addressNotRecognized && (
                       <div className="mt-1.5 p-1.5 bg-yellow-50 border border-yellow-300 rounded">
-                        <p className="text-xs font-semibold text-yellow-800">⚠️ UWAGA! Adres nie został rozpoznany.</p>
+                        <p className="text-xs font-semibold text-yellow-800"> UWAGA! Adres nie został rozpoznany.</p>
                         <p className="text-xs text-yellow-700">Cena musi zostać wprowadzona ręcznie.</p>
                       </div>
                     )}
@@ -1563,20 +1596,21 @@ export default function Home() {
                 <div key={index} className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-lg border-2 border-orange-600 shadow-sm hover:shadow-md transition-all">
                   <div className="flex justify-between items-center">
                     <span className="font-semibold text-white text-sm">{pizza.nazwa} - {pizza.rozmiar} ({pizza.cena} PLN)</span>
-                    <div className="flex space-x-2">
+                    <div className="flex space-x-2 items-center">
                       <button
                         type="button"
                         onClick={() => toggleIngredients(index)}
-                        className="text-white hover:text-orange-100 text-xs font-semibold hover:underline"
+                        className="px-3 py-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/40 rounded-lg text-white text-xs font-bold uppercase tracking-wide transition-all shadow-sm hover:shadow-md active:scale-95"
                       >
                         {expandedPizzaIndex === index ? "Ukryj składniki" : "Edytuj składniki"}
                       </button>
                       <button
                         type="button"
                         onClick={() => removePizza(index)}
-                        className="text-white hover:text-orange-100 font-bold text-base"
+                        className="w-8 h-8 flex items-center justify-center bg-red-600 hover:bg-red-700 border-2 border-red-700 rounded-lg text-white font-bold text-xl shadow-md hover:shadow-lg transition-all active:scale-95"
+                        title="Usuń pizzę"
                       >
-                        ✕
+                        
                       </button>
                     </div>
                   </div>
@@ -1665,11 +1699,7 @@ export default function Home() {
 
             {/* Menu pizz */}
             {showAddPizza && (
-              <div className={`p-4 rounded-xl border-2 shadow-md ${
-                orderData.pizze.length > 0 
-                  ? 'bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200' 
-                  : 'bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200'
-              }`}>
+              <div className="p-4 rounded-xl border-2 shadow-md bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
                 <h3 className="text-base font-bold text-gray-900 mb-3 uppercase tracking-wide">
                   {showPolNaPolSelector 
                     ? "Wybierz drugą pizzę (pół na pół)"

@@ -12,21 +12,21 @@ const config = {
 };
 
 async function testConnection() {
-  console.log('🔌 Testowanie połączenia z MariaDB...\n');
+  console.log('[CONNECT] Testowanie połączenia z MariaDB...\n');
   
   try {
     const connection = await mysql.createConnection(config);
-    console.log('✅ Połączenie udane!');
+    console.log(' Połączenie udane!');
     
     const [rows] = await connection.query('SELECT VERSION() as version');
-    console.log(`📊 Wersja: ${rows[0].version}`);
+    console.log(`[STATS] Wersja: ${rows[0].version}`);
     
     const [databases] = await connection.query('SHOW DATABASES');
-    console.log(`\n📦 Dostępne bazy danych:`);
+    console.log(`\n Dostępne bazy danych:`);
     databases.forEach(db => {
       const dbName = Object.values(db)[0];
       if (dbName === 'SmartPizzApp13') {
-        console.log(`   ✅ ${dbName} (nasza baza)`);
+        console.log(`    ${dbName} (nasza baza)`);
       } else {
         console.log(`   - ${dbName}`);
       }
@@ -34,12 +34,12 @@ async function testConnection() {
     
     await connection.end();
     
-    console.log('\n✅ Test zakończony pomyślnie!');
-    console.log('💡 MariaDB jest gotowa do migracji');
+    console.log('\n Test zakończony pomyślnie!');
+    console.log('[TIP] MariaDB jest gotowa do migracji');
     
   } catch (error) {
-    console.error('❌ Błąd połączenia:', error.message);
-    console.error('\n💡 Sprawdź czy:');
+    console.error(' Błąd połączenia:', error.message);
+    console.error('\n[TIP] Sprawdź czy:');
     console.error('   - MariaDB jest uruchomiona');
     console.error('   - Hasło root to: Pepperoni13');
     console.error('   - Port 3306 jest dostępny');

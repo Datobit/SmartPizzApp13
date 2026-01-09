@@ -85,7 +85,7 @@ async function main() {
       await prisma.pozycjaExtra.create({ data: extra });
     }
 
-    console.log("✅ Dane testowe zostały dodane do bazy danych!");
+    console.log(" Dane testowe zostały dodane do bazy danych!");
   } else {
     console.log("Baza danych już zawiera dane.");
   }
@@ -96,7 +96,7 @@ async function main() {
   const ulicaCount = await prisma.ulica.count();
   const extraCount = await prisma.pozycjaExtra.count();
   
-  console.log(`📊 Statystyki bazy danych:`);
+  console.log(`[STATS] Statystyki bazy danych:`);
   console.log(`- Pizze: ${pizzaCount}`);
   console.log(`- Napoje: ${napojCount}`);
   console.log(`- Ulice: ${ulicaCount}`);

@@ -9,7 +9,7 @@ async function copyData() {
   return new Promise((resolve, reject) => {
     const sourceDb = new Database('./smartpizzapp13-T3.db');
     
-    console.log('🔍 Sprawdzam dane w oryginalnej bazie...');
+    console.log('[SZUKAM] Sprawdzam dane w oryginalnej bazie...');
     
     // Sprawdź pizze
     sourceDb.all("SELECT * FROM `Menu pizza`", async (err, pizzas) => {
@@ -19,7 +19,7 @@ async function copyData() {
         return;
       }
       
-      console.log(`📊 Znaleziono ${pizzas.length} pizz`);
+      console.log(`[STATS] Znaleziono ${pizzas.length} pizz`);
       
       // Kopiuj pizze
       for (const pizza of pizzas) {
@@ -32,9 +32,9 @@ async function copyData() {
               cena_duza: pizza.cena_duza || 0
             }
           });
-          console.log(`✅ Skopiowano pizzę: ${pizza.nazwa}`);
+          console.log(` Skopiowano pizzę: ${pizza.nazwa}`);
         } catch (error) {
-          console.log(`⚠️ Pizza ${pizza.nazwa} już istnieje lub błąd:`, error.message);
+          console.log(` Pizza ${pizza.nazwa} już istnieje lub błąd:`, error.message);
         }
       }
       
@@ -45,7 +45,7 @@ async function copyData() {
           return;
         }
         
-        console.log(`📊 Znaleziono ${napoje.length} napojów`);
+        console.log(`[STATS] Znaleziono ${napoje.length} napojów`);
         
         // Kopiuj napoje
         for (const napoj of napoje) {
@@ -56,9 +56,9 @@ async function copyData() {
                 cena: napoj.cena
               }
             });
-            console.log(`✅ Skopiowano napój: ${napoj.nazwa}`);
+            console.log(` Skopiowano napój: ${napoj.nazwa}`);
           } catch (error) {
-            console.log(`⚠️ Napój ${napoj.nazwa} już istnieje lub błąd:`, error.message);
+            console.log(` Napój ${napoj.nazwa} już istnieje lub błąd:`, error.message);
           }
         }
         
@@ -69,7 +69,7 @@ async function copyData() {
             return;
           }
           
-          console.log(`📊 Znaleziono ${ulice.length} ulic`);
+          console.log(`[STATS] Znaleziono ${ulice.length} ulic`);
           
           // Kopiuj ulice
           for (const ulica of ulice) {
@@ -79,9 +79,9 @@ async function copyData() {
                   nazwa: ulica.nazwa
                 }
               });
-              console.log(`✅ Skopiowano ulicę: ${ulica.nazwa}`);
+              console.log(` Skopiowano ulicę: ${ulica.nazwa}`);
             } catch (error) {
-              console.log(`⚠️ Ulica ${ulica.nazwa} już istnieje lub błąd:`, error.message);
+              console.log(` Ulica ${ulica.nazwa} już istnieje lub błąd:`, error.message);
             }
           }
           
@@ -92,7 +92,7 @@ async function copyData() {
               return;
             }
             
-            console.log(`📊 Znaleziono ${extras.length} pozycji extra`);
+            console.log(`[STATS] Znaleziono ${extras.length} pozycji extra`);
             
             // Kopiuj pozycje extra
             for (const extra of extras) {
@@ -103,13 +103,13 @@ async function copyData() {
                     cena: extra.cena
                   }
                 });
-                console.log(`✅ Skopiowano pozycję extra: ${extra.nazwa}`);
+                console.log(` Skopiowano pozycję extra: ${extra.nazwa}`);
               } catch (error) {
-                console.log(`⚠️ Pozycja extra ${extra.nazwa} już istnieje lub błąd:`, error.message);
+                console.log(` Pozycja extra ${extra.nazwa} już istnieje lub błąd:`, error.message);
               }
             }
             
-            console.log('🎉 Kopiowanie danych zakończone!');
+            console.log(' Kopiowanie danych zakończone!');
             sourceDb.close();
             resolve();
           });
@@ -122,11 +122,11 @@ async function copyData() {
 // Uruchom kopiowanie
 copyData()
   .then(() => {
-    console.log('✅ Wszystkie dane zostały skopiowane!');
+    console.log(' Wszystkie dane zostały skopiowane!');
     process.exit(0);
   })
   .catch((error) => {
-    console.error('❌ Błąd podczas kopiowania:', error);
+    console.error(' Błąd podczas kopiowania:', error);
     process.exit(1);
   })
   .finally(async () => {

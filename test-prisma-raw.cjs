@@ -22,9 +22,9 @@ async function testPrismaRaw() {
         INSERT INTO [Zamówienia] (adres, telefon, pizza, sosy, dodatki, cena, platnosc, godzina_otrzymania, sosy_ile, rozmiar)
         VALUES ('Prisma Test 1', 123456789, 1, 1, 'test', 25.50, 'gotowka', '2025-10-06 12:00:00', 1, 'mala')
       `;
-      console.log('✅ Sukces [Zamówienia]:', result1);
+      console.log(' Sukces [Zamówienia]:', result1);
     } catch (err1) {
-      console.log('❌ Błąd [Zamówienia]:', err1.message);
+      console.log(' Błąd [Zamówienia]:', err1.message);
     }
 
     // Test 3: Sprawdzenie schemy Prisma

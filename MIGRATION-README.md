@@ -16,12 +16,12 @@ node full-migration.cjs
 ```
 
 Ten skrypt:
-- ✅ Sprawdzi połączenie z MariaDB
-- ✅ Utworzy bazę danych `SmartPizzApp13`
-- ✅ Wyeksportuje dane z SQLite
-- ✅ Utworzy strukturę tabel w MariaDB
-- ✅ Zaimportuje wszystkie dane
-- ✅ Wygeneruje Prisma Client
+-  Sprawdzi połączenie z MariaDB
+-  Utworzy bazę danych `SmartPizzApp13`
+-  Wyeksportuje dane z SQLite
+-  Utworzy strukturę tabel w MariaDB
+-  Zaimportuje wszystkie dane
+-  Wygeneruje Prisma Client
 
 ## Ręczna migracja (krok po kroku)
 

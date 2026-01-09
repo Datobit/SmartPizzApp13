@@ -3,7 +3,7 @@ import sqlite3 from 'sqlite3';
 const db = new sqlite3.Database('./smartpizzapp13-T3.db');
 
 db.serialize(() => {
-  console.log('📋 Sprawdzam tabelę Zamówienia:');
+  console.log('[LISTA] Sprawdzam tabelę Zamówienia:');
   
   // Struktura tabeli
   db.all("PRAGMA table_info(Zamówienia)", (err, columns) => {

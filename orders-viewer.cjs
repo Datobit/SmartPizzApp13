@@ -3,6 +3,7 @@ const path = require('path');
 const http = require('http');
 const url = require('url');
 const querystring = require('querystring');
+const fs = require('fs');
 require('dotenv').config();
 
 const server = http.createServer(async (req, res) => {
@@ -629,6 +630,815 @@ const server = http.createServer(async (req, res) => {
   
   // === KONIEC ENDPOINTÓW DLA SESJI ===
   
+  // === ENDPOINTY DLA KUCHNI ===
+  
+  // Strona kuchni
+  if (pathname === '/kuchnia') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    const kuchniaHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kuchnia - Organizacja Zamówień</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: white;
+      margin-bottom: 30px;
+      padding: 20px 30px;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    
+    .header > div:first-child {
+      text-align: left;
+    }
+    
+    .header h1 {
+      font-size: 2.5em;
+      font-weight: 800;
+      margin-bottom: 8px;
+      text-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    .header .subtitle {
+      font-size: 1.1em;
+      opacity: 0.9;
+    }
+    
+    .orders-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .order-card {
+      background: white;
+      border-radius: 16px;
+      padding: 0;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    
+    .status-tabs {
+      display: flex;
+      background: #f3f4f6;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    
+    .status-tab {
+      flex: 1;
+      padding: 16px 20px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 0.95em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: #9ca3af;
+    }
+    
+    .status-tab.active {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+      box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2);
+    }
+    
+    .status-tab.active.in-progress {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    }
+    
+    .status-tab.active.done {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+    
+    .order-content {
+      padding: 20px;
+    }
+    
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #f3f4f6;
+    }
+    
+    .order-id {
+      font-size: 1.5em;
+      font-weight: 800;
+      color: #1f2937;
+    }
+    
+    .order-time {
+      font-size: 0.9em;
+      color: #6b7280;
+      font-weight: 600;
+    }
+    
+    .order-type {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.8em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    
+    .order-type.dowoz {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    
+    .order-type.na_wynos {
+      background: #fed7aa;
+      color: #92400e;
+    }
+    
+    .order-type.na_miejscu {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    
+    .order-details {
+      margin: 16px 0;
+    }
+    
+    .detail-row {
+      margin: 10px 0;
+      font-size: 1em;
+      color: #374151;
+      line-height: 1.6;
+    }
+    
+    .detail-label {
+      font-weight: 700;
+      color: #1f2937;
+      display: inline-block;
+      min-width: 90px;
+    }
+    
+    .pizza-list {
+      margin: 16px 0;
+    }
+    
+    .pizza-item {
+      background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+      padding: 12px 16px;
+      margin: 8px 0;
+      border-radius: 10px;
+      border-left: 4px solid #8b5cf6;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    
+    .pizza-name {
+      font-weight: 700;
+      color: #1f2937;
+      font-size: 1.1em;
+    }
+    
+    .pizza-size {
+      color: #6b7280;
+      font-size: 0.9em;
+      margin-left: 10px;
+      font-weight: 600;
+    }
+    
+    .modifications {
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: #fef3c7;
+      border-radius: 6px;
+      font-size: 0.9em;
+      color: #92400e;
+      border-left: 3px solid #f59e0b;
+    }
+    
+    .modifications strong {
+      color: #78350f;
+      font-weight: 700;
+    }
+    
+    .order-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 2px solid #f3f4f6;
+    }
+    
+    .action-btn {
+      flex: 1;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+    
+    .action-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: white;
+      font-size: 1.2em;
+    }
+    
+    .empty-state-icon {
+      font-size: 4em;
+      margin-bottom: 16px;
+    }
+    
+    .refresh-btn {
+      background: white;
+      border: none;
+      color: #667eea;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 0.95em;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transition: all 0.2s ease;
+      text-transform: none;
+      letter-spacing: 0.3px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .refresh-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      background: rgba(255,255,255,0.95);
+    }
+    
+    .refresh-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    
+    .refresh-indicator {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      padding: 12px 24px;
+      border-radius: 24px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+      font-weight: 700;
+      color: #667eea;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Panel Kuchni</h1>
+      <p class="subtitle">System Organizacji Zamowien</p>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <a href="http://localhost:3000" class="refresh-btn" style="text-decoration: none;">
+        📝 Formularz Zamowienia
+      </a>
+      <button class="refresh-btn" onclick="loadOrders()">
+        🔄 Odswież
+      </button>
+    </div>
+  </div>
+  
+  <div class="orders-container" id="ordersContainer">
+    <div class="empty-state">
+      <div class="empty-state-icon">👨‍🍳</div>
+      <p>Ladowanie zamowien...</p>
+    </div>
+  </div>
+  
+  <script>
+    let lastUpdate = Date.now();
+    
+    async function loadOrders() {
+      try {
+        console.log('Ladowanie zamowien...');
+        const response = await fetch('/api/kuchnia/zamowienia');
+        const data = await response.json();
+        console.log('Otrzymano zamowien:', data.orders.length);
+        
+        renderOrders(data.orders, data.pizzas);
+        lastUpdate = Date.now();
+      } catch (error) {
+        console.error('Blad ladowania zamowien:', error);
+        document.getElementById('ordersContainer').innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Blad ladowania: ' + error.message + '</p></div>';
+      }
+    }
+    
+    function renderOrders(orders, pizzas) {
+      const container = document.getElementById('ordersContainer');
+      console.log('Renderowanie zamowien:', orders.length);
+      
+      // Filtruj tylko aktywne (nie gotowe) i sortuj chronologicznie
+      const activeOrders = orders.filter(o => o.status_kuchnia !== 'gotowe');
+      const sortedOrders = activeOrders.slice().sort((a, b) => a.id - b.id);
+      console.log('Posortowane aktywne zamowienia:', sortedOrders.length);
+      
+      if (sortedOrders.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><p>Brak zamowien do przygotowania</p></div>';
+        return;
+      }
+      
+      try {
+        container.innerHTML = sortedOrders.map(order => renderOrderCard(order, pizzas)).join('');
+        console.log('Zamowienia wyrenderowane');
+      } catch (error) {
+        console.error('Blad renderowania:', error);
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Blad: ' + error.message + '</p></div>';
+      }
+    }
+    
+    function renderOrderCard(order, pizzas) {
+      try {
+        const typeMap = { 'na_miejscu': 'Na miejscu', 'na_wynos': 'Na wynos', 'dowoz': 'Dowoz' };
+        const orderTime = new Date(order.created_at).toLocaleTimeString('pl-PL');
+        const currentStatus = order.status_kuchnia || 'do_przygotowania';
+        
+        let pizzaHtml = '';
+        if (order.pizze) {
+          try {
+            const pizzeArray = JSON.parse(order.pizze);
+            pizzaHtml = pizzeArray.map(pizza => {
+              const pizzaData = pizzas.find(p => p.id === pizza.id);
+              const pizzaName = pizzaData ? pizzaData.nazwa : 'Pizza ID:' + pizza.id;
+              return '<div class="pizza-item"><span class="pizza-name">' + pizzaName + '</span><span class="pizza-size">[' + pizza.rozmiar + ']</span></div>';
+            }).join('');
+          } catch (e) {
+            console.error('Blad parsowania pizze:', e);
+            pizzaHtml = '<div class="pizza-item">Blad odczytu pizzy</div>';
+          }
+        }
+        
+        let modificationsHtml = '';
+        if (order.skladniki && order.skladniki.trim() !== '') {
+          modificationsHtml = '<div class="modifications"><strong>⚠️ Modyfikacje:</strong> ' + order.skladniki + '</div>';
+        }
+        
+        let addressHtml = '';
+        if (order.typ_zamowienia === 'dowoz') {
+          addressHtml = '<div class="detail-row"><span class="detail-label">Telefon:</span> ' + (order.telefon || '-') + '</div>' +
+                        '<div class="detail-row"><span class="detail-label">Adres:</span> ' + (order.adres || '-') + '</div>';
+        }
+        
+        return '<div class="order-card">' +
+          '<div class="status-tabs">' +
+            '<button class="status-tab ' + (currentStatus === 'do_przygotowania' ? 'active' : '') + '" onclick="updateStatus(' + order.id + ', &apos;do_przygotowania&apos;)">Do przygotowania</button>' +
+            '<button class="status-tab in-progress ' + (currentStatus === 'w_trakcie' ? 'active' : '') + '" onclick="updateStatus(' + order.id + ', &apos;w_trakcie&apos;)">W trakcie</button>' +
+            '<button class="status-tab done ' + (currentStatus === 'gotowe' ? 'active' : '') + '" onclick="updateStatus(' + order.id + ', &apos;gotowe&apos;)">Gotowe</button>' +
+          '</div>' +
+          '<div class="order-content">' +
+            '<div class="order-header">' +
+              '<div class="order-id">#' + order.id + '</div>' +
+              '<div class="order-time">' + orderTime + '</div>' +
+            '</div>' +
+            '<div class="order-type ' + order.typ_zamowienia + '">' + (typeMap[order.typ_zamowienia] || order.typ_zamowienia) + '</div>' +
+            '<div class="order-details">' +
+              addressHtml +
+              '<div class="pizza-list">' + pizzaHtml + '</div>' +
+              modificationsHtml +
+              '<div class="detail-row"><span class="detail-label">Cena:</span> ' + order.cena_calkowita + ' PLN</div>' +
+              '<div class="detail-row"><span class="detail-label">Platnosc:</span> ' + order.platnosc + '</div>' +
+            '</div>' +
+            '<div class="order-actions">' +
+              '<button class="action-btn" onclick="printOrder(' + order.id + ')">Drukuj Paragon</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      } catch (error) {
+        console.error('Blad renderowania karty zamowienia ID ' + order.id + ':', error);
+        return '<div class="order-card"><div class="order-content">Blad: ' + error.message + '</div></div>';
+      }
+    }
+    
+    async function updateStatus(orderId, newStatus) {
+      try {
+        const response = await fetch('/api/kuchnia/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, status: newStatus })
+        });
+        
+        if (response.ok) {
+          loadOrders();
+        } else {
+          alert('Blad aktualizacji statusu');
+        }
+      } catch (error) {
+        console.error('Blad:', error);
+        alert('Blad polaczenia');
+      }
+    }
+    
+    async function printOrder(orderId) {
+      try {
+        const response = await fetch('/print-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderIds: [orderId] })
+        });
+        
+        const result = await response.json();
+        if (response.ok) {
+          alert('Paragon wydrukowany!');
+        } else {
+          alert('Blad drukowania: ' + result.error);
+        }
+      } catch (error) {
+        console.error('Blad drukowania:', error);
+        alert('Blad polaczenia z drukarką');
+      }
+    }
+    
+    // Initial load
+    loadOrders();
+  </script>
+</body>
+</html>
+    `;
+    res.end(kuchniaHtml);
+    return;
+  }
+  
+  // API: Pobierz zamówienia dla kuchni
+  if (pathname === '/api/kuchnia/zamowienia' && req.method === 'GET') {
+    let connection;
+    try {
+      connection = await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'Pepperoni13',
+        database: 'SmartPizzApp13'
+      });
+      
+      // Pobierz zamówienia z dzisiaj które nie są archiwalne (gotowe starsze niż 1h ukrywamy)
+      const [orders] = await connection.execute(
+        `SELECT z.* FROM zamowienia z 
+         WHERE DATE(z.created_at) = CURDATE()
+         AND (z.status_kuchnia != 'gotowe' OR z.updated_at > DATE_SUB(NOW(), INTERVAL 1 HOUR))
+         ORDER BY 
+           CASE z.status_kuchnia
+             WHEN 'do_przygotowania' THEN 1
+             WHEN 'w_trakcie' THEN 2
+             WHEN 'gotowe' THEN 3
+           END,
+           z.created_at DESC`
+      );
+      
+      const [pizzas] = await connection.execute('SELECT * FROM menu_pizza');
+      
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ orders, pizzas }));
+      
+      if (connection) await connection.end();
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: error.message }));
+      if (connection) await connection.end();
+    }
+    return;
+  }
+  
+  // API: Aktualizuj status kuchni
+  if (pathname === '/api/kuchnia/status' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', async () => {
+      let connection;
+      try {
+        const data = JSON.parse(body);
+        const { orderId, status } = data;
+        
+        if (!orderId || !status) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'Brak wymaganych parametrów' }));
+          return;
+        }
+        
+        connection = await mysql.createConnection({
+          host: 'localhost',
+          user: 'root',
+          password: 'Pepperoni13',
+          database: 'SmartPizzApp13'
+        });
+        
+        await connection.execute(
+          'UPDATE zamowienia SET status_kuchnia = ?, updated_at = NOW() WHERE id = ?',
+          [status, orderId]
+        );
+        
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true }));
+        
+        if (connection) await connection.end();
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: error.message }));
+        if (connection) await connection.end();
+      }
+    });
+    return;
+  }
+  
+  // === KONIEC ENDPOINTÓW DLA KUCHNI ===
+  
+  // Endpoint drukowania paragonów
+  if (pathname === '/print-receipt' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', async () => {
+      let connection;
+      try {
+        const data = JSON.parse(body);
+        const orderIds = data.orderIds;
+        
+        if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'Brak zamówień do wydruku' }));
+          return;
+        }
+        
+        connection = await mysql.createConnection({
+          host: 'localhost',
+          user: 'root',
+          password: 'Pepperoni13',
+          database: 'SmartPizzApp13'
+        });
+        
+        // Pobierz zamówienia
+        const placeholders = orderIds.map(() => '?').join(',');
+        const [orders] = await connection.execute(
+          `SELECT z.*, k.nazwa as kierowca_nazwa 
+           FROM zamowienia z
+           LEFT JOIN sesje s ON z.sesja_id = s.id
+           LEFT JOIN kierowcy k ON s.kierowca_id = k.id
+           WHERE z.id IN (${placeholders})`,
+          orderIds
+        );
+        
+        // Pobierz dane pizz i napojów
+        const [pizzas] = await connection.execute('SELECT * FROM menu_pizza');
+        const [napoje] = await connection.execute('SELECT * FROM napoje');
+        const [pozycjeExtra] = await connection.execute('SELECT * FROM pozycje_extra');
+        
+        // Funkcja drukowania na drukarce USB
+        const printReceipt = (order) => {
+          return new Promise((resolve, reject) => {
+            // Funkcja do konwersji polskich znaków na ASCII
+            const toAscii = (text) => {
+              if (!text) return text;
+              return text
+                .replace(/ą/g, 'a').replace(/Ą/g, 'A')
+                .replace(/ć/g, 'c').replace(/Ć/g, 'C')
+                .replace(/ę/g, 'e').replace(/Ę/g, 'E')
+                .replace(/ł/g, 'l').replace(/Ł/g, 'L')
+                .replace(/ń/g, 'n').replace(/Ń/g, 'N')
+                .replace(/ó/g, 'o').replace(/Ó/g, 'O')
+                .replace(/ś/g, 's').replace(/Ś/g, 'S')
+                .replace(/ź/g, 'z').replace(/Ź/g, 'Z')
+                .replace(/ż/g, 'z').replace(/Ż/g, 'Z');
+            };
+            
+            // Ścieżka do drukarki USB Xprinter
+            const printerPath = process.env.PRINTER_PORT || '/dev/usb/lp0';
+            
+            console.log(`Drukowanie na: ${printerPath}`);
+            
+            // Sprawdź czy drukarka istnieje
+            if (!fs.existsSync(printerPath)) {
+              const error = new Error(`Drukarka nie znaleziona: ${printerPath}`);
+              console.error(error.message);
+              console.error('Sprawdź:');
+              console.error('1. Czy drukarka jest podłączona (sudo dmesg | grep -i xprinter)');
+              console.error('2. Czy ścieżka jest poprawna (ustaw PRINTER_PORT w .env)');
+              console.error('3. Czy masz uprawnienia: sudo chmod 666 ' + printerPath);
+              reject(error);
+              return;
+            }
+            
+            // Komendy ESC/POS
+            const ESC = 0x1B;
+            const GS = 0x1D;
+            const LF = 0x0A;
+            const CENTER = [ESC, 0x61, 0x01]; // Wyśrodkowanie
+            const LEFT = [ESC, 0x61, 0x00];   // Do lewej
+            const BOLD_ON = [ESC, 0x45, 0x01]; // Pogrubienie
+            const BOLD_OFF = [ESC, 0x45, 0x00];
+            const SIZE_NORMAL = [GS, 0x21, 0x00];
+            const SIZE_DOUBLE = [GS, 0x21, 0x11]; // Podwójna wielkość
+            const CUT = [GS, 0x56, 0x00]; // Ucięcie papieru
+            
+            // Przygotuj dane paragonu
+            let receipt = [];
+            
+            // Inicjalizacja
+            receipt.push(ESC, 0x40); // Reset drukarki
+            
+            // Nagłówek
+            receipt.push(...CENTER, ...SIZE_DOUBLE, ...BOLD_ON);
+            receipt.push(...Buffer.from('PizzApp13\n', 'utf-8'));
+            receipt.push(...BOLD_OFF, ...SIZE_NORMAL);
+            receipt.push(...Buffer.from('================================\n', 'utf-8'));
+            
+            // data
+            const orderDate = new Date(order.created_at).toLocaleString('pl-PL');
+            receipt.push(...Buffer.from(`Data: ${orderDate}\n`, 'utf-8'));
+            receipt.push(...Buffer.from('================================\n', 'utf-8'));
+            
+            // Typ zamówienia
+            const typMap = { 'na_miejscu': 'Na miejscu', 'na_wynos': 'Na wynos', 'dowoz': 'Dowoz' };
+            receipt.push(...Buffer.from(`Typ: ${typMap[order.typ_zamowienia] || order.typ_zamowienia}\n`, 'utf-8'));
+            
+            // Telefon i adres (tylko dla dowozu)
+            if (order.typ_zamowienia === 'dowoz') {
+              receipt.push(...LEFT, ...SIZE_DOUBLE, ...BOLD_ON);
+              receipt.push(...Buffer.from(toAscii(`Tel: ${order.telefon || '-'}\n`), 'utf-8'));
+              receipt.push(LF);
+              receipt.push(...BOLD_OFF, ...SIZE_NORMAL);
+              receipt.push(...Buffer.from(toAscii(`Adres: ${order.adres || '-'}\n`), 'utf-8'));
+            }
+            receipt.push(...Buffer.from('================================\n', 'utf-8'));
+            
+            // Pizze
+            if (order.pizze) {
+              try {
+                const pizzeArray = JSON.parse(order.pizze);
+                receipt.push(...BOLD_ON);
+                receipt.push(...Buffer.from('PIZZE:\n', 'utf-8'));
+                receipt.push(...BOLD_OFF);
+                pizzeArray.forEach((pizza) => {
+                  const pizzaData = pizzas.find(p => p.id === pizza.id);
+                  let pizzaName = pizzaData ? pizzaData.nazwa : `Pizza ID:${pizza.id}`;
+                  if (pizza.polNaPol) {
+                    const drugaPizza = pizzas.find(p => p.id === pizza.polNaPol.id);
+                    if (drugaPizza) {
+                      pizzaName = `${pizzaData.nazwa}/${drugaPizza.nazwa} (pol na pol)`;
+                    }
+                  }
+                  receipt.push(...Buffer.from(toAscii(`  ${pizzaName}\n`), 'utf-8'));
+                  receipt.push(...Buffer.from(toAscii(`    Rozmiar: ${pizza.rozmiar}\n`), 'utf-8'));
+                });
+              } catch (e) {}
+            }
+            
+            // Modyfikacje składników
+            if (order.skladniki) {
+              receipt.push(...BOLD_ON);
+              receipt.push(...Buffer.from('Modyfikacje:\n', 'utf-8'));
+              receipt.push(...BOLD_OFF);
+              receipt.push(...Buffer.from(toAscii(`  ${order.skladniki.replace(/<br>/g, '\n  ')}\n`), 'utf-8'));
+            }
+            
+            // Sosy
+            if (order.sosy) {
+              try {
+                const sosy = JSON.parse(order.sosy);
+                if (sosy.pom > 0 || sosy.czos > 0) {
+                  receipt.push(...BOLD_ON);
+                  receipt.push(...Buffer.from('Sosy:\n', 'utf-8'));
+                  receipt.push(...BOLD_OFF);
+                  if (sosy.pom > 0) receipt.push(...Buffer.from(toAscii(`  Pomidorowy: ${sosy.pom}\n`), 'utf-8'));
+                  if (sosy.czos > 0) receipt.push(...Buffer.from(toAscii(`  Czosnkowy: ${sosy.czos}\n`), 'utf-8'));
+                }
+              } catch (e) {}
+            }
+            
+            // Napoje
+            if (order.napoj) {
+              try {
+                const napojIds = JSON.parse(order.napoj);
+                if (Array.isArray(napojIds) && napojIds.length > 0) {
+                  receipt.push(...BOLD_ON);
+                  receipt.push(...Buffer.from('Napoje:\n', 'utf-8'));
+                  receipt.push(...BOLD_OFF);
+                  napojIds.forEach(id => {
+                    const napojData = napoje.find(n => n.id == id);
+                    const napojName = napojData ? napojData.nazwa : `ID:${id}`;
+                    receipt.push(...Buffer.from(toAscii(`  ${napojName}\n`), 'utf-8'));
+                  });
+                  receipt.push(LF);
+                }
+              } catch (e) {}
+            }
+            
+            // Pozycje extra
+            if (order.pozycje_extra) {
+              try {
+                const extraIds = JSON.parse(order.pozycje_extra);
+                if (Array.isArray(extraIds) && extraIds.length > 0) {
+                  receipt.push(...BOLD_ON);
+                  receipt.push(...Buffer.from('Dodatki:\n', 'utf-8'));
+                  receipt.push(...BOLD_OFF);
+                  extraIds.forEach(id => {
+                    const extraData = pozycjeExtra.find(e => e.id == id);
+                    const extraName = extraData ? extraData.nazwa : `ID:${id}`;
+                    receipt.push(...Buffer.from(toAscii(`  ${extraName}\n`), 'utf-8'));
+                  });
+                }
+              } catch (e) {}
+            }
+            
+            // Podsumowanie
+            receipt.push(...Buffer.from('================================\n', 'utf-8'));
+            receipt.push(...SIZE_DOUBLE, ...BOLD_ON);
+            receipt.push(...Buffer.from(`SUMA: ${order.cena_calkowita} PLN\n`, 'utf-8'));
+            receipt.push(...SIZE_NORMAL, ...BOLD_OFF);
+            receipt.push(...Buffer.from(toAscii(`Platnosc: ${order.platnosc}\n`), 'utf-8'));
+            if (order.is_kupony) {
+              receipt.push(...Buffer.from('KUPONY\n', 'utf-8'));
+            }
+            if (order.kierowca_nazwa) {
+              receipt.push(...Buffer.from(toAscii(`Kierowca: ${order.kierowca_nazwa}\n`), 'utf-8'));
+            }
+            receipt.push(...Buffer.from('================================\n', 'utf-8'));
+            receipt.push(LF);
+            
+            // Stopka
+            receipt.push(...CENTER);
+            receipt.push(...Buffer.from('Smacznego!\n', 'utf-8'));
+            receipt.push(LF, LF); // Kilka linii pustych (brak automatycznego cięcia)
+            
+            // Wyślij do drukarki USB
+            try {
+              const buffer = Buffer.from(receipt);
+              fs.writeFileSync(printerPath, buffer);
+              console.log(` Wydrukowano paragon dla zamówienia #${order.id}`);
+              resolve();
+            } catch (err) {
+              console.error(' Błąd wysyłania do drukarki:', err.message);
+              if (err.code === 'EACCES') {
+                console.error('   Brak uprawnień! Wykonaj: sudo chmod 666 ' + printerPath);
+              }
+              reject(err);
+            }
+          });
+        };
+        
+        // Drukuj każde zamówienie
+        for (const order of orders) {
+          try {
+            await printReceipt(order);
+          } catch (err) {
+            console.error(`Błąd drukowania zamówienia #${order.id}:`, err.message);
+          }
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true, printed: orders.length }));
+        
+        if (connection) await connection.end();
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: error.message }));
+        if (connection) await connection.end();
+      }
+    });
+    return;
+  }
+  
   // Główna strona
   res.writeHead(200, { 
     'Content-Type': 'text/html; charset=utf-8',
@@ -999,6 +1809,42 @@ const server = http.createServer(async (req, res) => {
       width: 100%;
       margin-bottom: 6px;
     }
+    .print-btn {
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+    .print-btn:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 10px 30px rgba(139, 92, 246, 0.5);
+    }
+    .print-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .order-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      accent-color: #8b5cf6;
+    }
+    #select-all-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      accent-color: #8b5cf6;
+    }
   </style>
   <script>
     let kierowcyList = [];
@@ -1159,6 +2005,70 @@ const server = http.createServer(async (req, res) => {
     function resetFilters() {
       window.location.href = '/';
     }
+    
+    function toggleSelectAll() {
+      const selectAllCheckbox = document.getElementById('select-all-checkbox');
+      const checkboxes = document.querySelectorAll('.order-checkbox');
+      checkboxes.forEach(cb => {
+        cb.checked = selectAllCheckbox.checked;
+      });
+      updatePrintButton();
+    }
+    
+    function updatePrintButton() {
+      const checkboxes = document.querySelectorAll('.order-checkbox:checked');
+      const printBtn = document.getElementById('print-btn');
+      const count = checkboxes.length;
+      
+      if (count > 0) {
+        printBtn.disabled = false;
+        printBtn.textContent = 'Drukuj zaznaczone (' + count + ')';
+      } else {
+        printBtn.disabled = true;
+        printBtn.textContent = 'Drukuj zaznaczone (0)';
+      }
+    }
+    
+    async function printSelected() {
+      const checkboxes = document.querySelectorAll('.order-checkbox:checked');
+      const orderIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+      
+      if (orderIds.length === 0) {
+        alert('Nie zaznaczono żadnych zamówień do wydruku');
+        return;
+      }
+      
+      const printBtn = document.getElementById('print-btn');
+      printBtn.disabled = true;
+      printBtn.textContent = 'Drukowanie...';
+      
+      try {
+        const response = await fetch('/print-receipt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ orderIds })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          alert('Pomyslnie wydrukowano ' + result.printed + ' paragonow');
+          // Odznacz wszystkie checkboxy
+          checkboxes.forEach(cb => cb.checked = false);
+          document.getElementById('select-all-checkbox').checked = false;
+          updatePrintButton();
+        } else {
+          alert('Blad drukowania: ' + result.error);
+        }
+      } catch (error) {
+        alert('Blad polaczenia: ' + error.message);
+      } finally {
+        printBtn.disabled = false;
+        updatePrintButton();
+      }
+    }
   </script>
 </head>
 <body>
@@ -1168,6 +2078,9 @@ const server = http.createServer(async (req, res) => {
     <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: nowrap;">
       <button class="apply-btn" onclick="window.location.href='http://localhost:3000'" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4);">
         Formularz zamówienia
+      </button>
+      <button class="apply-btn" onclick="window.location.href='/kuchnia'" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);">
+        Panel Kuchni
       </button>
       <button class="apply-btn" onclick="window.location.href='/customer-dashboard'" style="background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);">
         Statystyki Klientów
@@ -1218,8 +2131,15 @@ const server = http.createServer(async (req, res) => {
   
   <p><strong>Wyświetlono zamówień:</strong> ${orders.length} ${search ? `(wyszukiwanie: "${search}")` : ''} ${dateFilter === 'today' ? '(tylko dzisiejsze)' : ''}</p>
   
+  <button id="print-btn" class="print-btn" onclick="printSelected()" disabled>
+    Drukuj zaznaczone (0)
+  </button>
+  
   <table>
     <tr>
+      <th style="width: 50px;">
+        <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll()" title="Zaznacz wszystkie">
+      </th>
       <th style="width: 80px;">Typ</th>
       <th style="width: 100px;">Telefon</th>
       <th style="width: 150px;">Adres</th>
@@ -1237,6 +2157,9 @@ const server = http.createServer(async (req, res) => {
     </tr>
     ${orders.map((order, i) => `
     <tr id="row-${order.id}" style="vertical-align: top;">
+      <td style="text-align: center;">
+        <input type="checkbox" class="order-checkbox" value="${order.id}" onchange="updatePrintButton()">
+      </td>
       <td>${formatTypZamowienia(order.typ_zamowienia)}</td>
       <td id="telefon-${order.id}" class="editable-cell">${order.telefon || '-'}</td>
       <td id="adres-${order.id}" class="editable-cell">${order.adres || '-'}</td>
@@ -1253,8 +2176,8 @@ const server = http.createServer(async (req, res) => {
       <td id="kierowca-${order.id}" class="editable-cell">${order.kierowca_nazwa || '-'}</td>
       <td>${formatPolishTime(order.created_at || order.godzina_otrzymania)}</td>
       <td id="actions-${order.id}" style="white-space: nowrap;">
-        <button class="edit-btn" onclick="editOrder(${order.id}, '${order.platnosc || ''}', ${order.cena_calkowita || order.cena || 0}, '${order.kierowca_nazwa || ''}', ${order.sesja_id || 'null'}, '${(order.telefon || '').replace(/'/g, "\\\\'")}', '${(order.adres || '').replace(/'/g, "\\\\'").replace(/\n/g, ' ')}')">✏️ Edytuj</button>
-        <button class="delete-btn" onclick="deleteOrder(${order.id})">🗑️ Usuń</button>
+        <button class="edit-btn" onclick="editOrder(${order.id}, '${order.platnosc || ''}', ${order.cena_calkowita || order.cena || 0}, '${order.kierowca_nazwa || ''}', ${order.sesja_id || 'null'}, '${(order.telefon || '').replace(/'/g, "\\\\'")}', '${(order.adres || '').replace(/'/g, "\\\\'").replace(/\n/g, ' ')}')">Edytuj</button>
+        <button class="delete-btn" onclick="deleteOrder(${order.id})">Usun</button>
       </td>
     </tr>
     `).join('')}
@@ -1282,6 +2205,6 @@ const server = http.createServer(async (req, res) => {
 
 const PORT = 3006;
 server.listen(PORT, () => {
-  console.log(`🍕 Serwer zamówień działa na http://localhost:${PORT}`);
+  console.log(`Serwer zamowien dziala na http://localhost:${PORT}`);
 });
 //

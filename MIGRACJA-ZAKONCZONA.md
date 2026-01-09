@@ -1,49 +1,49 @@
-# ✅ Migracja z SQLite do MariaDB - ZAKOŃCZONA
+#  Migracja z SQLite do MariaDB - ZAKOŃCZONA
 
 **Data:** 9 grudnia 2025  
-**Status:** ✅ SUKCES
+**Status:**  SUKCES
 
 ---
 
-## 📊 Podsumowanie Migracji
+## [STATS] Podsumowanie Migracji
 
 ### Dane Zmigrowane
-- ✅ **menu_pizza**: 41 rekordów
-- ✅ **skladniki**: 43 rekordów
-- ✅ **relacja_skladniki**: 258 rekordów
-- ✅ **napoje**: 14 rekordów
-- ✅ **pozycje_extra**: 4 rekordy
-- ✅ **ulice**: 531 rekordów
-- ✅ **zamowienia**: 2 rekordy
+-  **menu_pizza**: 41 rekordów
+-  **skladniki**: 43 rekordów
+-  **relacja_skladniki**: 258 rekordów
+-  **napoje**: 14 rekordów
+-  **pozycje_extra**: 4 rekordy
+-  **ulice**: 531 rekordów
+-  **zamowienia**: 2 rekordy
 
 **RAZEM: 891 rekordów**
 
 ---
 
-## 🔧 Zaktualizowane Pliki
+##  Zaktualizowane Pliki
 
 ### 1. Konfiguracja Bazy Danych
-- ✅ `prisma/schema.prisma` - zmiana provider z `sqlite` na `mysql`
-- ✅ `.env` - dodany `DATABASE_URL="mysql://root:Pepperoni13@localhost:3306/SmartPizzApp13"`
-- ✅ `package.json` - dodane skrypty migracyjne
+-  `prisma/schema.prisma` - zmiana provider z `sqlite` na `mysql`
+-  `.env` - dodany `DATABASE_URL="mysql://root:Pepperoni13@localhost:3306/SmartPizzApp13"`
+-  `package.json` - dodane skrypty migracyjne
 
 ### 2. Główne Skrypty (Zaktualizowane do MariaDB)
-- ✅ `orders-viewer.cjs` - viewer zamówień (mysql2)
-- ✅ `dashboard.cjs` - dashboard analityczny (mysql2)
-- ✅ `update_menu_sqlite.cjs` - aktualizacja menu (mysql2)
-- ✅ `check-zamowienia-structure.cjs` - sprawdzanie struktury (mysql2)
+-  `orders-viewer.cjs` - viewer zamówień (mysql2)
+-  `dashboard.cjs` - dashboard analityczny (mysql2)
+-  `update_menu_sqlite.cjs` - aktualizacja menu (mysql2)
+-  `check-zamowienia-structure.cjs` - sprawdzanie struktury (mysql2)
 
 ### 3. Nowe Skrypty Migracyjne
-- ✅ `migrate-to-mariadb.cjs` - eksport danych z SQLite
-- ✅ `init-mariadb.cjs` - inicjalizacja bazy MariaDB
-- ✅ `import-data-to-mariadb.cjs` - import danych do MariaDB
-- ✅ `full-migration.cjs` - pełna automatyczna migracja
-- ✅ `test-mariadb-connection.cjs` - test połączenia
-- ✅ `check-mariadb-data.cjs` - sprawdzanie danych w MariaDB
+-  `migrate-to-mariadb.cjs` - eksport danych z SQLite
+-  `init-mariadb.cjs` - inicjalizacja bazy MariaDB
+-  `import-data-to-mariadb.cjs` - import danych do MariaDB
+-  `full-migration.cjs` - pełna automatyczna migracja
+-  `test-mariadb-connection.cjs` - test połączenia
+-  `check-mariadb-data.cjs` - sprawdzanie danych w MariaDB
 
 ---
 
-## 📦 Zainstalowane Pakiety
+##  Zainstalowane Pakiety
 
 ```bash
 npm install mysql2 dotenv
@@ -54,7 +54,7 @@ npm install mysql2 dotenv
 
 ---
 
-## 🚀 Uruchamianie Aplikacji
+##  Uruchamianie Aplikacji
 
 ### Główna Aplikacja
 ```bash
@@ -76,7 +76,7 @@ Viewer dostępny na: http://localhost:3006
 
 ---
 
-## 🔍 Skrypty Sprawdzające
+## [SZUKAM] Skrypty Sprawdzające
 
 ### Sprawdź wszystkie dane w MariaDB
 ```bash
@@ -95,7 +95,7 @@ npm run migrate:test
 
 ---
 
-## 🗄️ Informacje o Bazie Danych
+##  Informacje o Bazie Danych
 
 ### Connection String
 ```
@@ -112,7 +112,7 @@ mysql://root:Pepperoni13@localhost:3306/SmartPizzApp13
 
 ---
 
-## 📝 Struktura Tabeli Zamowienia
+##  Struktura Tabeli Zamowienia
 
 ```sql
 CREATE TABLE zamowienia (
@@ -134,7 +134,7 @@ CREATE TABLE zamowienia (
 
 ---
 
-## ⚙️ Komendy NPM
+##  Komendy NPM
 
 ### Migracja
 ```bash
@@ -153,34 +153,34 @@ npx prisma studio         # Otwórz Prisma Studio
 
 ---
 
-## 🎯 Następne Kroki
+##  Następne Kroki
 
 ### Zalecane
-1. ✅ **Przetestuj aplikację**: `npm run dev`
-2. ✅ **Sprawdź dashboard**: `node dashboard.cjs`
-3. ✅ **Sprawdź viewer zamówień**: `node orders-viewer.cjs`
-4. ⚠️ **Zaktualizuj pozostałe skrypty** (fix_db.cjs, check-*.cjs) jeśli są używane
+1.  **Przetestuj aplikację**: `npm run dev`
+2.  **Sprawdź dashboard**: `node dashboard.cjs`
+3.  **Sprawdź viewer zamówień**: `node orders-viewer.cjs`
+4.  **Zaktualizuj pozostałe skrypty** (fix_db.cjs, check-*.cjs) jeśli są używane
 
 ### Opcjonalne
-1. ⚪ **Usuń stare pakiety SQLite**:
+1.  **Usuń stare pakiety SQLite**:
    ```bash
    npm uninstall sqlite3 better-sqlite3
    ```
 
-2. ⚪ **Zarchiwizuj starą bazę SQLite**:
+2.  **Zarchiwizuj starą bazę SQLite**:
    ```bash
    mkdir archive
    move smartpizzapp13-T3.db archive/
    move prisma\smartpizzapp13-T3.db archive\
    ```
 
-3. ⚪ **Usuń stare skrypty migracyjne**:
+3.  **Usuń stare skrypty migracyjne**:
    - Skrypty check-* korzystające ze SQLite
    - Stare skrypty testowe
 
 ---
 
-## 🐛 Rozwiązywanie Problemów
+##  Rozwiązywanie Problemów
 
 ### Błąd połączenia z bazą
 ```bash
@@ -205,7 +205,7 @@ npm install
 
 ---
 
-## 📚 Użyte Technologie
+##  Użyte Technologie
 
 - **Node.js**: 22.20.0
 - **Prisma**: 5.22.0
@@ -216,16 +216,16 @@ npm install
 
 ---
 
-## ✅ Weryfikacja Migracji
+##  Weryfikacja Migracji
 
 Wszystkie testy przeszły pomyślnie:
-- ✅ Połączenie z MariaDB działa
-- ✅ Wszystkie tabele utworzone
-- ✅ Wszystkie dane zaimportowane (891 rekordów)
-- ✅ Prisma Client wygenerowany
-- ✅ Struktura tabeli zamowienia poprawna
-- ✅ Przykładowe zamówienia widoczne
+-  Połączenie z MariaDB działa
+-  Wszystkie tabele utworzone
+-  Wszystkie dane zaimportowane (891 rekordów)
+-  Prisma Client wygenerowany
+-  Struktura tabeli zamowienia poprawna
+-  Przykładowe zamówienia widoczne
 
 ---
 
-**Migracja zakończona sukcesem! 🎉**
+**Migracja zakończona sukcesem! **

@@ -10,14 +10,14 @@ const server = http.createServer((req, res) => {
   } else {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(`
-      <h1>🍕 Pizza Debug Server</h1>
-      <p><a href="/debug">🧪 Debug API Tests</a></p>
-      <p><a href="http://localhost:3002" target="_blank">📱 Main App</a></p>
-      <p><a href="http://localhost:3001" target="_blank">📋 Orders Viewer</a></p>
+      <h1> Pizza Debug Server</h1>
+      <p><a href="/debug">[TEST] Debug API Tests</a></p>
+      <p><a href="http://localhost:3002" target="_blank"> Main App</a></p>
+      <p><a href="http://localhost:3001" target="_blank">[LISTA] Orders Viewer</a></p>
     `);
   }
 });
 
 server.listen(8080, () => {
-  console.log('🧪 Debug server running at http://localhost:8080');
+  console.log('[TEST] Debug server running at http://localhost:8080');
 });

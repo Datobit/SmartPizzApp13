@@ -30,7 +30,7 @@ async function checkPrismaTableStructure() {
     console.log('Samples:', samples);
 
   } catch (error) {
-    console.error('❌ Błąd:', error.message);
+    console.error(' Błąd:', error.message);
   } finally {
     await prisma.$disconnect();
   }

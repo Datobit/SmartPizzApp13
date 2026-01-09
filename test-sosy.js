@@ -10,7 +10,7 @@ console.log("Typ czos:", typeof testSosy.czos);
 
 // Sprawdź czy wartości są większe od 0
 if (testSosy.pom > 0 || testSosy.czos > 0) {
-  console.log("✅ Sosy powinny być zapisane");
+  console.log(" Sosy powinny być zapisane");
 } else {
-  console.log("❌ Brak sosów do zapisu");
+  console.log(" Brak sosów do zapisu");
 }

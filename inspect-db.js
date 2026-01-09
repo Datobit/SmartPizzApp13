@@ -3,7 +3,7 @@ import sqlite3 from 'sqlite3';
 const db = new sqlite3.Database('./smartpizzapp13-T3.db');
 
 db.serialize(() => {
-  console.log('🔍 Sprawdzam strukturę bazy danych...');
+  console.log('[SZUKAM] Sprawdzam strukturę bazy danych...');
   
   // Lista wszystkich tabel
   db.all("SELECT name FROM sqlite_master WHERE type='table'", (err, tables) => {
@@ -12,14 +12,14 @@ db.serialize(() => {
       return;
     }
     
-    console.log('📊 Znalezione tabele:');
+    console.log('[STATS] Znalezione tabele:');
     tables.forEach(table => {
       console.log(`- ${table.name}`);
     });
     
     // Dla każdej tabeli sprawdź strukturę i dane
     tables.forEach(table => {
-      console.log(`\n🔍 Sprawdzam tabelę: ${table.name}`);
+      console.log(`\n[SZUKAM] Sprawdzam tabelę: ${table.name}`);
       
       // Struktura tabeli
       db.all(`PRAGMA table_info(${table.name})`, (err, columns) => {

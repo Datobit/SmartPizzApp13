@@ -30,16 +30,16 @@ async function testNewStructure() {
         ${29.50}
       )
     `;
-    console.log('✅ SUKCES z nową strukturą:', result);
+    console.log(' SUKCES z nową strukturą:', result);
 
     // Sprawdzmy czy rekord został dodany
     const lastRecord = await prisma.$queryRaw`
       SELECT * FROM zamowienia ORDER BY id DESC LIMIT 1
     `;
-    console.log('📋 Ostatni rekord:', lastRecord);
+    console.log('[LISTA] Ostatni rekord:', lastRecord);
 
   } catch (error) {
-    console.error('❌ Błąd:', error.message);
+    console.error(' Błąd:', error.message);
   } finally {
     await prisma.$disconnect();
   }

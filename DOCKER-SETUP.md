@@ -1,4 +1,4 @@
-# 🐳 Uruchomienie SmartPizzApp w Docker na OmArchy 3.2.2
+#  Uruchomienie SmartPizzApp w Docker na OmArchy 3.2.2
 
 ## Wymagania
 - Docker Engine

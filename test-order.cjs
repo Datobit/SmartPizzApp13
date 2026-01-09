@@ -40,7 +40,7 @@ try {
   console.log('Ostatnie zamówienie:', lastOrder);
   
   db.close();
-  console.log('✅ Test zakończony pomyślnie!');
+  console.log(' Test zakończony pomyślnie!');
 } catch (error) {
-  console.error('❌ Błąd podczas testu:', error.message);
+  console.error(' Błąd podczas testu:', error.message);
 }
