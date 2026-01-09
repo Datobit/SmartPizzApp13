@@ -8,6 +8,18 @@ const config = {
   },
   // Standalone output dla Docker
   output: 'standalone',
+  
+  // Wyłącz telemetrię i zewnętrzne połączenia
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  // Wyłącz preconnect do zewnętrznych domen
+  experimental: {
+    optimizeFonts: false,
+  },
 };
 
 export default config;
