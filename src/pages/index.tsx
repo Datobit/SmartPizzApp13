@@ -1,6 +1,12 @@
 import Head from "next/head";
 import { useState, useEffect, useRef } from "react";
 import { api } from "~/utils/api";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Badge } from "~/components/ui/badge";
+import { Pizza, Phone, MapPin, CreditCard, Truck, ShoppingBag, Store } from "lucide-react";
 
 interface PizzaSelection {
   id: number;
@@ -639,161 +645,114 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="min-h-screen bg-gray-50 py-4">
-        <div className="container mx-auto max-w-4xl px-4">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-4xl font-black text-gray-900 tracking-tight" style={{ marginLeft: '30px' }}>
-              SmartPizzApp
-            </h1>
-            <div className="flex gap-2">
-              <a
-                href="http://localhost:3006"
-                className="bg-gradient-to-r from-orange-600 to-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold hover:from-orange-700 hover:to-orange-800 shadow-lg hover:shadow-xl transition-all"
+      <main className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background py-8">
+        <div className="container mx-auto max-w-7xl px-4">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center justify-center w-16 h-16 bg-primary rounded-full shadow-lg">
+                <Pizza className="w-9 h-9 text-primary-foreground" />
+              </div>
+              <h1 className="text-5xl font-bold text-foreground tracking-tight">
+                SmartPizzApp
+              </h1>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                asChild
+                variant="default"
+                size="lg"
+                className="shadow-lg font-semibold"
               >
-                Orders Viewer
-              </a>
-              <a
-                href="http://localhost:3006/kuchnia"
-                className="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold hover:from-purple-700 hover:to-purple-800 shadow-lg hover:shadow-xl transition-all"
+                <a href="http://localhost:3006">
+                  Orders Viewer
+                </a>
+              </Button>
+              <Button
+                asChild
+                variant="secondary"
+                size="lg"
+                className="shadow-lg font-semibold"
               >
-                🍳 Kuchnia
-              </a>
+                <a href="http://localhost:3006/kuchnia">
+                  🍳 Kuchnia
+                </a>
+              </Button>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded-xl shadow-xl border border-gray-100">
-            {/* Wybór typu zamówienia */}
-            <div className="mb-4">
-              <label className="block text-xs font-bold text-gray-700 mb-2 uppercase">
-                Typ zamówienia
-              </label>
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setTypZamowienia("na_miejscu")}
-                  className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
-                    typZamowienia === "na_miejscu"
-                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-600 shadow-lg scale-105"
-                      : "bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:shadow-md"
-                  }`}
-                >
-                  Na miejscu
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTypZamowienia("na_wynos")}
-                  className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
-                    typZamowienia === "na_wynos"
-                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-600 shadow-lg scale-105"
-                      : "bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:shadow-md"
-                  }`}
-                >
-                  Na wynos
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTypZamowienia("dowoz")}
-                  className={`p-3 rounded-lg border-2 font-bold transition-all text-sm ${
-                    typZamowienia === "dowoz"
-                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-600 shadow-lg scale-105"
-                      : "bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:shadow-md"
-                  }`}
-                >
-                  Dowóz
-                </button>
-              </div>
-            </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Typ zamówienia */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl flex items-center gap-3 font-bold">
+                  <Store className="w-6 h-6" />
+                  Typ zamówienia
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-4">
+                  <Button
+                    type="button"
+                    variant={typZamowienia === "na_miejscu" ? "default" : "outline"}
+                    onClick={() => setTypZamowienia("na_miejscu")}
+                    className="h-20 text-lg font-semibold"
+                  >
+                    <Store className="w-6 h-6 mr-2" />
+                    Na miejscu
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={typZamowienia === "na_wynos" ? "default" : "outline"}
+                    onClick={() => setTypZamowienia("na_wynos")}
+                    className="h-20 text-lg font-semibold"
+                  >
+                    <ShoppingBag className="w-6 h-6 mr-2" />
+                    Na wynos
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={typZamowienia === "dowoz" ? "default" : "outline"}
+                    onClick={() => setTypZamowienia("dowoz")}
+                    className="h-20 text-lg font-semibold"
+                  >
+                    <Truck className="w-6 h-6 mr-2" />
+                    Dowóz
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Dane kontaktowe - tylko dla dowozu */}
             {typZamowienia === "dowoz" && (
-              <div>
-                {/* Telefon */}
-                <div className="mb-2">
-                <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">
-                  Telefon
-                </label>
-                <input
-                  ref={telefonInputRef}
-                  type="tel"
-                  value={orderData.telefon.replace(/(\d{3})(?=\d)/g, '$1 ')}
-                  onChange={(e) => {
-                    const cleanedValue = e.target.value.replace(/\s/g, '');
-                    setOrderData(prev => ({ ...prev, telefon: cleanedValue }));
-                  }}
-                  onFocus={(e) => {
-                    if (!showKeyboard || activeInputRef?.current !== telefonInputRef.current) {
-                      setActiveInputRef(telefonInputRef);
-                      setKeyboardType('numeric');
-                      setShowKeyboard(true);
-                    }
-                    // Ustaw kursor na końcu tekstu
-                    const input = e.target;
-                    setTimeout(() => {
-                      input.setSelectionRange(input.value.length, input.value.length);
-                    }, 0);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                    }
-                  }}
-                  className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
-                  placeholder="123 456 789"
-                  required
-                />
-              </div>
-
-              {/* Adres dostawy - 3 wiersze */}
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">
-                  Adres dostawy
-                </label>
-                
-                {/* Wiersz 1: Dzielnica | Dodatkowe informacje */}
-                <div className="grid grid-cols-2 gap-1.5 mb-1.5">
-                  {/* Dzielnica */}
-                  <div>
-                    <select
-                      value={miejscowosc}
+              <Card>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-xl flex items-center gap-3 font-bold">
+                    <Phone className="w-6 h-6" />
+                    Dane kontaktowe
+                  </CardTitle>
+                  <CardDescription className="text-base mt-1">Wypełnij dane do dostawy</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Telefon */}
+                  <div className="space-y-2">
+                    <Label htmlFor="telefon" className="text-base font-semibold">Telefon</Label>
+                    <Input
+                      id="telefon"
+                      ref={telefonInputRef}
+                      type="tel"
+                      className="h-12 text-base"
+                      value={orderData.telefon.replace(/(\d{3})(?=\d)/g, '$1 ')}
                       onChange={(e) => {
-                        const newMiejscowosc = e.target.value;
-                        setMiejscowosc(newMiejscowosc);
-                        // Oznacz że użytkownik ręcznie zmienił dzielnicę
-                        setUserManuallyChangedDzielnica(true);
-                        setAddressNotRecognized(true);
-                        // Reset ceny przy ręcznej zmianie dzielnicy
-                        setCustomDeliveryPrice(null);
+                        const cleanedValue = e.target.value.replace(/\s/g, '');
+                        setOrderData(prev => ({ ...prev, telefon: cleanedValue }));
                       }}
-                      className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm transition-all"
-                    >
-                      <option value="">-- Wybierz dzielnicę --</option>
-                      <option value="Południe">Południe (0 PLN)</option>
-                      <option value="Kazimierza Wlk.-Śródmieście">Kazimierza Wlk.-Śródmieście (5 PLN)</option>
-                      <option value="Michelin">Michelin (5 PLN)</option>
-                      <option value="Zazamcze">Zazamcze (5 PLN)</option>
-                      <option value="Płocka">Płocka (7 PLN)</option>
-                      <option value="Zawiśle">Zawiśle (7 PLN)</option>
-                      <option value="Nowa Wieś">Nowa Wieś (10 PLN)</option>
-                      <option value="Rybnica">Rybnica (10 PLN)</option>
-                      <option value="Szpetal Górny">Szpetal Górny (10 PLN)</option>
-                      <option value="Toruńska-Anwil">Toruńska-Anwil (10 PLN)</option>
-                    </select>
-                  </div>
-
-                  {/* Dodatkowe informacje */}
-                  <div>
-                    <input
-                      ref={dodatkoweInfoInputRef}
-                      type="text"
-                      value={dodatkoweInfo}
-                      onChange={(e) => setDodatkoweInfo(e.target.value)}
                       onFocus={(e) => {
-                        if (!showKeyboard || activeInputRef?.current !== dodatkoweInfoInputRef.current) {
-                          setActiveInputRef(dodatkoweInfoInputRef);
-                          setKeyboardType('text');
+                        if (!showKeyboard || activeInputRef?.current !== telefonInputRef.current) {
+                          setActiveInputRef(telefonInputRef);
+                          setKeyboardType('numeric');
                           setShowKeyboard(true);
                         }
-                        // Ustaw kursor na końcu tekstu
                         const input = e.target;
                         setTimeout(() => {
                           input.setSelectionRange(input.value.length, input.value.length);
@@ -804,14 +763,82 @@ export default function Home() {
                           e.preventDefault();
                         }
                       }}
-                      className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
-                      placeholder="Dodatkowe informacje (np. piętro, kod domofonu)"
+                      placeholder="123 456 789"
+                      required
                     />
                   </div>
-                </div>
 
-                {/* Wiersz 2: Ulica / Nr / Mieszkanie */}
-                <div className="flex gap-1.5 mb-1.5">
+                  {/* Adres dostawy */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 mb-3">
+                      <MapPin className="w-6 h-6 text-muted-foreground" />
+                      <Label className="text-base font-semibold">Adres dostawy</Label>
+                    </div>
+                    
+                    {/* Wiersz 1: Dzielnica | Dodatkowe informacje */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Dzielnica */}
+                      <div className="space-y-2">
+                        <Label htmlFor="dzielnica" className="text-sm font-semibold">Dzielnica</Label>
+                        <select
+                          id="dzielnica"
+                          value={miejscowosc}
+                          className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          onChange={(e) => {
+                            const newMiejscowosc = e.target.value;
+                            setMiejscowosc(newMiejscowosc);
+                            setUserManuallyChangedDzielnica(true);
+                            setAddressNotRecognized(true);
+                            setCustomDeliveryPrice(null);
+                          }}
+                        >
+                          <option value="">-- Wybierz dzielnicę --</option>
+                          <option value="Południe">Południe (0 PLN)</option>
+                          <option value="Kazimierza Wlk.-Śródmieście">Kazimierza Wlk.-Śródmieście (5 PLN)</option>
+                          <option value="Michelin">Michelin (5 PLN)</option>
+                          <option value="Zazamcze">Zazamcze (5 PLN)</option>
+                          <option value="Płocka">Płocka (7 PLN)</option>
+                          <option value="Zawiśle">Zawiśle (7 PLN)</option>
+                          <option value="Nowa Wieś">Nowa Wieś (10 PLN)</option>
+                          <option value="Rybnica">Rybnica (10 PLN)</option>
+                          <option value="Szpetal Górny">Szpetal Górny (10 PLN)</option>
+                          <option value="Toruńska-Anwil">Toruńska-Anwil (10 PLN)</option>
+                        </select>
+                      </div>
+
+                      {/* Dodatkowe informacje */}
+                      <div className="space-y-2">
+                        <Label htmlFor="dodatkowe" className="text-sm font-semibold">Dodatkowe informacje</Label>
+                        <Input
+                          id="dodatkowe"
+                          ref={dodatkoweInfoInputRef}
+                          type="text"
+                          className="h-12 text-base"
+                          value={dodatkoweInfo}
+                          onChange={(e) => setDodatkoweInfo(e.target.value)}
+                          onFocus={(e) => {
+                            if (!showKeyboard || activeInputRef?.current !== dodatkoweInfoInputRef.current) {
+                              setActiveInputRef(dodatkoweInfoInputRef);
+                              setKeyboardType('text');
+                              setShowKeyboard(true);
+                            }
+                            const input = e.target;
+                            setTimeout(() => {
+                              input.setSelectionRange(input.value.length, input.value.length);
+                            }, 0);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                            }
+                          }}
+                          placeholder="Piętro, kod domofonu"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Wiersz 2: Ulica / Nr / Mieszkanie */}
+                    <div className="flex gap-1.5 mb-1.5">
                     {/* Ulica - 75% szerokości */}
                     <div className="relative flex-[3]">
                       <input
@@ -1544,76 +1571,97 @@ export default function Home() {
                     )}
                   </div>
                 )}
-
-                {/* Wiersz 3: Info o dowozie i cenie dostawy */}
-                {typZamowienia === "dowoz" && (
-                  <div className="p-3 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg shadow-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex-1">
-                        <span className="text-xs font-semibold text-gray-900">Dowóz: </span>
-                        <span className="text-sm font-bold text-blue-700">
-                          {dzielnicaNazwa || miejscowosc || "nie rozpoznano"}
-                        </span>
+                  
+                  {/* Wiersz 3: Info o dowozie i cenie dostawy */}
+                  {typZamowienia === "dowoz" && (
+                    <div className="p-3 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1">
+                          <span className="text-xs font-semibold text-gray-900">Dowóz: </span>
+                          <span className="text-sm font-bold text-blue-700">
+                            {dzielnicaNazwa || miejscowosc || "nie rozpoznano"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold text-gray-700 uppercase">Cena dostawy:</label>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            value={customDeliveryPrice ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === "") {
+                                setCustomDeliveryPrice(null);
+                              } else {
+                                setCustomDeliveryPrice(parseInt(value) || 0);
+                              }
+                            }}
+                            className="w-20 p-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
+                            placeholder="0"
+                          />
+                          <span className="text-xs font-medium text-gray-700">PLN</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-700 uppercase">Cena dostawy:</label>
-                        <input
-                          type="number"
-                          step="1"
-                          min="0"
-                          value={customDeliveryPrice ?? ""}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (value === "") {
-                              setCustomDeliveryPrice(null);
-                            } else {
-                              setCustomDeliveryPrice(parseInt(value) || 0);
-                            }
-                          }}
-                          className="w-20 p-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
-                          placeholder="0"
-                        />
-                        <span className="text-xs font-medium text-gray-700">PLN</span>
-                      </div>
+                      
+                      {/* Ostrzeżenie gdy adres nie został rozpoznany */}
+                      {addressNotRecognized && (
+                        <div className="mt-1.5 p-1.5 bg-yellow-50 border border-yellow-300 rounded">
+                          <p className="text-xs font-semibold text-yellow-800">⚠ UWAGA! Adres nie został rozpoznany.</p>
+                          <p className="text-xs text-yellow-700">Cena musi zostać wprowadzona ręcznie.</p>
+                        </div>
+                      )}
                     </div>
-                    
-                    {/* Ostrzeżenie gdy adres nie został rozpoznany */}
-                    {addressNotRecognized && (
-                      <div className="mt-1.5 p-1.5 bg-yellow-50 border border-yellow-300 rounded">
-                        <p className="text-xs font-semibold text-yellow-800"> UWAGA! Adres nie został rozpoznany.</p>
-                        <p className="text-xs text-yellow-700">Cena musi zostać wprowadzona ręcznie.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              </div>
+                  )}
+                </div>
+                </CardContent>
+              </Card>
             )}
 
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">Wybrane pizze</h3>
-              {orderData.pizze.map((pizza, index) => (
-                <div key={index} className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-lg border-2 border-orange-600 shadow-sm hover:shadow-md transition-all">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-white text-sm">{pizza.nazwa} - {pizza.rozmiar} ({pizza.cena} PLN)</span>
-                    <div className="flex space-x-2 items-center">
-                      <button
-                        type="button"
-                        onClick={() => toggleIngredients(index)}
-                        className="px-3 py-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/40 rounded-lg text-white text-xs font-bold uppercase tracking-wide transition-all shadow-sm hover:shadow-md active:scale-95"
-                      >
-                        {expandedPizzaIndex === index ? "Ukryj składniki" : "Edytuj składniki"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removePizza(index)}
-                        className="w-8 h-8 flex items-center justify-center bg-red-600 hover:bg-red-700 border-2 border-red-700 rounded-lg text-white font-bold text-xl shadow-md hover:shadow-lg transition-all active:scale-95"
-                        title="Usuń pizzę"
-                      >
-                        
-                      </button>
-                    </div>
-                  </div>
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl flex items-center gap-3 font-bold">
+                  <Pizza className="w-6 h-6" />
+                  Wybrane pizze
+                </CardTitle>
+                <CardDescription className="text-base mt-1">
+                  {orderData.pizze.length === 0 ? "Dodaj pizzę do zamówienia" : `${orderData.pizze.length} pizz w zamówieniu`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {orderData.pizze.map((pizza, index) => (
+                  <Card key={index} className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+                    <CardContent className="pt-6">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-base mb-1">{pizza.nazwa}</h4>
+                          <div className="flex gap-2 flex-wrap">
+                            <Badge variant="secondary">{pizza.rozmiar}</Badge>
+                            <Badge variant="outline">{pizza.cena} PLN</Badge>
+                            {pizza.isKupony && <Badge>KUPONY</Badge>}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="default"
+                            className="font-semibold"
+                            onClick={() => toggleIngredients(index)}
+                          >
+                            {expandedPizzaIndex === index ? "Ukryj" : "Edytuj składniki"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="default"
+                            className="font-semibold"
+                            onClick={() => removePizza(index)}
+                          >
+                            Usuń
+                          </Button>
+                        </div>
+                      </div>
                   
                   {/* Edytor składników */}
                   {expandedPizzaIndex === index && (
@@ -1683,19 +1731,28 @@ export default function Home() {
                       </div>
                     </div>
                   )}
-                </div>
-              ))}
-              
-              {!showAddPizza && (
-                <button
-                  type="button"
-                  onClick={() => setShowAddPizza(true)}
-                  className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-700 hover:border-blue-500 hover:text-blue-700 hover:bg-blue-50 font-semibold text-sm transition-all"
-                >
-                  + Dodaj pizzę
-                </button>
-              )}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {!showAddPizza && orderData.pizze.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Brak wybranych pizz. Kliknij poniżej aby dodać.
+                  </div>
+                )}
+                
+                {!showAddPizza && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="w-full h-16 border-dashed text-lg font-semibold"
+                    onClick={() => setShowAddPizza(true)}
+                  >
+                    + Dodaj pizzę
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Menu pizz */}
             {showAddPizza && (
@@ -1848,94 +1905,105 @@ export default function Home() {
             )}
 
             {/* Sosy */}
-            <div className="bg-white p-2 rounded-lg border border-gray-300 shadow-sm">
-              <h3 className="text-xs font-bold text-gray-700 mb-1.5 uppercase">Sosy (2 PLN/szt)</h3>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-[10px] text-gray-600 mb-0.5">Sos pomidorowy</label>
-                  <div className="flex gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setOrderData(prev => ({
-                        ...prev,
-                        sosy: { ...prev.sosy, pom: Math.max(0, prev.sosy.pom - 1) }
-                      }))}
-                      className="w-7 h-7 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded text-base font-bold text-gray-700 active:scale-95 transition-transform"
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      min="0"
-                      value={orderData.sosy.pom}
-                      onChange={(e) => setOrderData(prev => ({
-                        ...prev,
-                        sosy: { ...prev.sosy, pom: parseInt(e.target.value) || 0 }
-                      }))}
-                      className="w-10 h-7 px-1 border border-gray-300 rounded text-center font-bold text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setOrderData(prev => ({
-                        ...prev,
-                        sosy: { ...prev.sosy, pom: prev.sosy.pom + 1 }
-                      }))}
-                      className="w-7 h-7 flex items-center justify-center bg-blue-600 hover:bg-blue-700 border border-blue-700 rounded text-base font-bold text-white active:scale-95 transition-transform"
-                    >
-                      +
-                    </button>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-bold">Sosy (2 PLN/szt)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-base font-semibold">Sos pomidorowy</Label>
+                    <div className="flex gap-2 items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="default"
+                        onClick={() => setOrderData(prev => ({
+                          ...prev,
+                          sosy: { ...prev.sosy, pom: Math.max(0, prev.sosy.pom - 1) }
+                        }))}
+                        className="w-12 h-12 text-xl font-bold"
+                      >
+                        −
+                      </Button>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={orderData.sosy.pom}
+                        onChange={(e) => setOrderData(prev => ({
+                          ...prev,
+                          sosy: { ...prev.sosy, pom: parseInt(e.target.value) || 0 }
+                        }))}
+                        className="w-20 h-12 text-center text-lg font-bold"
+                      />
+                      <Button
+                        type="button"
+                        size="default"
+                        onClick={() => setOrderData(prev => ({
+                          ...prev,
+                          sosy: { ...prev.sosy, pom: prev.sosy.pom + 1 }
+                        }))}
+                        className="w-12 h-12 text-xl font-bold"
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-base font-semibold">Sos czosnkowy</Label>
+                    <div className="flex gap-2 items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="default"
+                        onClick={() => setOrderData(prev => ({
+                          ...prev,
+                          sosy: { ...prev.sosy, czos: Math.max(0, prev.sosy.czos - 1) }
+                        }))}
+                        className="w-12 h-12 text-xl font-bold"
+                      >
+                        −
+                      </Button>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={orderData.sosy.czos}
+                        onChange={(e) => setOrderData(prev => ({
+                          ...prev,
+                          sosy: { ...prev.sosy, czos: parseInt(e.target.value) || 0 }
+                        }))}
+                        className="w-20 h-12 text-center text-lg font-bold"
+                      />
+                      <Button
+                        type="button"
+                        size="default"
+                        onClick={() => setOrderData(prev => ({
+                          ...prev,
+                          sosy: { ...prev.sosy, czos: prev.sosy.czos + 1 }
+                        }))}
+                        className="w-12 h-12 text-xl font-bold"
+                      >
+                        +
+                      </Button>
+                    </div>
                   </div>
                 </div>
-                <div className="flex-1">
-                  <label className="block text-[10px] text-gray-600 mb-0.5">Sos czosnkowy</label>
-                  <div className="flex gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setOrderData(prev => ({
-                        ...prev,
-                        sosy: { ...prev.sosy, czos: Math.max(0, prev.sosy.czos - 1) }
-                      }))}
-                      className="w-7 h-7 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded text-base font-bold text-gray-700 active:scale-95 transition-transform"
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      min="0"
-                      value={orderData.sosy.czos}
-                      onChange={(e) => setOrderData(prev => ({
-                        ...prev,
-                        sosy: { ...prev.sosy, czos: parseInt(e.target.value) || 0 }
-                      }))}
-                      className="w-10 h-7 px-1 border border-gray-300 rounded text-center font-bold text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setOrderData(prev => ({
-                        ...prev,
-                        sosy: { ...prev.sosy, czos: prev.sosy.czos + 1 }
-                      }))}
-                      className="w-7 h-7 flex items-center justify-center bg-blue-600 hover:bg-blue-700 border border-blue-700 rounded text-base font-bold text-white active:scale-95 transition-transform"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* Pozycje extra i Napoje - obok siebie */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-6">
               {/* Pozycje extra */}
-              <div className="bg-white p-2 rounded-lg border border-gray-300 shadow-sm">
-                <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase">
-                  Pozycje extra (opcjonalnie)
-                </label>
-                <div className="space-y-1.5">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-bold">Pozycje extra</CardTitle>
+                  <CardDescription className="text-sm">Opcjonalnie</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
                   {orderData.pozycjeExtraIds.map((extraId, index) => {
                     const wybranaExtra = pozycjeExtra?.find((e: any) => e.id === extraId);
                     return (
-                      <div key={index} className="flex gap-1 items-center">
+                      <div key={index} className="flex gap-2 items-center">
                         <select
                           value={extraId}
                           onChange={(e) => {
@@ -1943,7 +2011,7 @@ export default function Home() {
                             newPozycjeExtraIds[index] = parseInt(e.target.value);
                             setOrderData(prev => ({ ...prev, pozycjeExtraIds: newPozycjeExtraIds }));
                           }}
-                          className="flex-1 h-7 px-1.5 border border-gray-300 rounded text-xs font-medium focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white"
+                          className="flex-1 h-10 px-3 border border-input rounded-md text-sm font-medium bg-background focus:ring-2 focus:ring-ring"
                         >
                           {pozycjeExtra?.map((extra: any) => (
                             <option key={extra.id} value={extra.id}>
@@ -1951,24 +2019,27 @@ export default function Home() {
                             </option>
                           ))}
                         </select>
-                        <button
+                        <Button
                           type="button"
+                          variant="destructive"
+                          size="default"
                           onClick={() => {
                             const newPozycjeExtraIds = orderData.pozycjeExtraIds.filter((_, i) => i !== index);
                             setOrderData(prev => ({ ...prev, pozycjeExtraIds: newPozycjeExtraIds }));
                           }}
-                          className="px-2 h-7 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold transition-colors active:scale-95"
+                          className="font-semibold"
                         >
                           Usuń
-                        </button>
+                        </Button>
                       </div>
                     );
                   })}
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="default"
                     onClick={() => {
                       if (pozycjeExtra && pozycjeExtra.length > 0) {
-                        // Znajdź "przekładaniec" jako domyślny
                         const przekladaniec = pozycjeExtra.find((e: any) => e.nazwa.toLowerCase().includes("przekladaniec") || e.nazwa.toLowerCase().includes("przekładaniec"));
                         const defaultExtraId = przekladaniec ? przekladaniec.id : pozycjeExtra[0].id;
                         setOrderData(prev => ({ 
@@ -1977,23 +2048,24 @@ export default function Home() {
                         }));
                       }
                     }}
-                    className="w-full h-8 bg-green-600 hover:bg-green-700 text-white rounded font-semibold text-xs transition-colors active:scale-95"
+                    className="w-full h-12 font-semibold text-base"
                   >
                     + Dodaj pozycję extra
-                  </button>
-                </div>
-              </div>
+                  </Button>
+                </CardContent>
+              </Card>
 
               {/* Napoje */}
-              <div className="bg-white p-2 rounded-lg border border-gray-300 shadow-sm">
-                <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase">
-                  Napoje (opcjonalnie)
-                </label>
-                <div className="space-y-1.5">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-bold">Napoje</CardTitle>
+                  <CardDescription className="text-sm">Opcjonalnie</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
                   {orderData.napojeIds.map((napojId, index) => {
                     const wybranyNapoj = napoje?.find((n: any) => n.id === napojId);
                     return (
-                      <div key={index} className="flex gap-1 items-center">
+                      <div key={index} className="flex gap-2 items-center">
                         <select
                           value={napojId}
                           onChange={(e) => {
@@ -2001,7 +2073,7 @@ export default function Home() {
                             newNapojeIds[index] = parseInt(e.target.value);
                             setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
                           }}
-                          className="flex-1 h-7 px-1.5 border border-gray-300 rounded text-xs font-medium focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white"
+                          className="flex-1 h-10 px-3 border border-input rounded-md text-sm font-medium bg-background focus:ring-2 focus:ring-ring"
                         >
                           {napoje?.map((napoj: any) => (
                             <option key={napoj.id} value={napoj.id}>
@@ -2009,24 +2081,27 @@ export default function Home() {
                             </option>
                           ))}
                         </select>
-                        <button
+                        <Button
                           type="button"
+                          variant="destructive"
+                          size="default"
                           onClick={() => {
                             const newNapojeIds = orderData.napojeIds.filter((_, i) => i !== index);
                             setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
                           }}
-                          className="px-2 h-7 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold transition-colors active:scale-95"
+                          className="font-semibold"
                         >
                           Usuń
-                        </button>
+                        </Button>
                       </div>
                     );
                   })}
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="default"
                     onClick={() => {
                       if (napoje && napoje.length > 0) {
-                        // Znajdź napój "0,85" (priorytet) lub "85" jako domyślny
                         const napoj085 = napoje.find((n: any) => n.nazwa.includes("0,85") || n.nazwa.includes("0.85") || (n.nazwa.includes("napoje") && n.cena === 10));
                         const defaultNapojId = napoj085 ? napoj085.id : napoje[0].id;
                         setOrderData(prev => ({ 
@@ -2035,102 +2110,121 @@ export default function Home() {
                         }));
                       }
                     }}
-                    className="w-full h-8 bg-green-600 hover:bg-green-700 text-white rounded font-semibold text-xs transition-colors active:scale-95"
+                    className="w-full h-12 font-semibold text-base"
                   >
                     + Dodaj napój
-                  </button>
-                </div>
-              </div>
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Płatność i Kierowca */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-6">
               {/* Płatność */}
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border-2 border-gray-200 shadow-md">
-                <label className="block text-xs font-bold text-gray-700 mb-2 uppercase">Płatność</label>
-                <div className="flex space-x-4">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="platnosc"
-                      value="gotowka"
-                      checked={orderData.platnosc === "gotowka"}
-                      onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
-                      className="mr-2 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-semibold text-gray-800">Gotówka</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="platnosc"
-                      value="karta"
-                      checked={orderData.platnosc === "karta"}
-                      onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
-                      className="mr-2 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-semibold text-gray-800">Karta</span>
-                  </label>
-                </div>
-                {orderData.platnosc === "gotowka" && typZamowienia === "dowoz" && (
-                  <p className="text-xs text-gray-600 mt-2 text-center">
-                    Płatność gotówką zostanie automatycznie dodana jako wpływ do sesji kierowcy
-                  </p>
-                )}
-              </div>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-3 font-bold">
+                    <CreditCard className="w-6 h-6" />
+                    Płatność
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col space-y-3">
+                    <label className="flex items-center space-x-3 cursor-pointer p-3 border-2 rounded-lg transition-all hover:bg-accent/50" 
+                           style={{ borderColor: orderData.platnosc === "gotowka" ? "hsl(var(--primary))" : "hsl(var(--border))" }}>
+                      <input
+                        type="radio"
+                        name="platnosc"
+                        value="gotowka"
+                        checked={orderData.platnosc === "gotowka"}
+                        onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
+                        className="w-5 h-5"
+                      />
+                      <span className="text-base font-semibold">Gotówka</span>
+                    </label>
+                    <label className="flex items-center space-x-3 cursor-pointer p-3 border-2 rounded-lg transition-all hover:bg-accent/50"
+                           style={{ borderColor: orderData.platnosc === "karta" ? "hsl(var(--primary))" : "hsl(var(--border))" }}>
+                      <input
+                        type="radio"
+                        name="platnosc"
+                        value="karta"
+                        checked={orderData.platnosc === "karta"}
+                        onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
+                        className="w-5 h-5"
+                      />
+                      <span className="text-base font-semibold">Karta</span>
+                    </label>
+                  </div>
+                  {orderData.platnosc === "gotowka" && typZamowienia === "dowoz" && (
+                    <p className="text-sm text-muted-foreground mt-3 p-3 bg-muted/50 rounded-lg">
+                      Płatność gotówką zostanie automatycznie dodana jako wpływ do sesji kierowcy
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Wybór kierowcy */}
               {!sesjeLoading && aktywneSesje && aktywneSesje.length > 0 && typZamowienia === "dowoz" && (
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border-2 border-blue-200 shadow-md">
-                  <label className="block text-xs font-bold text-gray-700 mb-2 uppercase">
-                    {aktywneSesje.length === 1 ? "Kierowca:" : "Wybierz kierowcę:"}
-                  </label>
-                  {aktywneSesje.length === 1 ? (
-                    <div className="text-lg font-bold text-blue-800 text-center p-3 bg-white rounded-lg">
-                      {aktywneSesje[0].kierowca.nazwa}
-                    </div>
-                  ) : (
-                    <select
-                      value={wybranaSesjaId ?? ""}
-                      onChange={(e) => setWybranaSesjaId(e.target.value ? parseInt(e.target.value) : null)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none text-base bg-white"
-                    >
-                      <option value="">-- Wybierz kierowcę --</option>
-                      {aktywneSesje.map((sesja: any) => (
-                        <option key={sesja.id} value={sesja.id}>
-                          {sesja.kierowca.nazwa}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg font-bold">
+                      {aktywneSesje.length === 1 ? "Kierowca:" : "Wybierz kierowcę:"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {aktywneSesje.length === 1 ? (
+                      <div className="text-2xl font-bold text-primary text-center p-6 bg-primary/10 rounded-lg">
+                        {aktywneSesje[0].kierowca.nazwa}
+                      </div>
+                    ) : (
+                      <select
+                        value={wybranaSesjaId ?? ""}
+                        onChange={(e) => setWybranaSesjaId(e.target.value ? parseInt(e.target.value) : null)}
+                        className="w-full h-12 px-4 border-2 border-input rounded-lg focus:border-ring focus:ring-2 focus:ring-ring text-base font-medium bg-background"
+                      >
+                        <option value="">-- Wybierz kierowcę --</option>
+                        {aktywneSesje.map((sesja: any) => (
+                          <option key={sesja.id} value={sesja.id}>
+                            {sesja.kierowca.nazwa}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </CardContent>
+                </Card>
               )}
             </div>
 
             {/* Podsumowanie ceny */}
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border-2 border-gray-200 shadow-md">
-              <div className="text-2xl font-extrabold text-center text-gray-900">
-                Cena całkowita: {totalPrice.toFixed(2)} PLN
-              </div>
-            </div>
+            <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/30">
+              <CardContent className="py-8">
+                <div className="text-center">
+                  <p className="text-lg text-muted-foreground mb-3 font-semibold">Cena całkowita</p>
+                  <p className="text-5xl font-bold text-primary">{totalPrice.toFixed(2)} PLN</p>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Przyciski akcji */}
-            <div className="space-y-3 pt-3">
-              <button
-                type="submit"
-                disabled={placeOrderMutation.isLoading || orderData.pizze.length === 0}
-                className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-4 px-6 rounded-xl text-base font-bold hover:from-green-700 hover:to-green-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transition-all"
-              >
-                {placeOrderMutation.isLoading ? "Składanie zamówienia..." : "Złóż zamówienie"}
-              </button>
-              
-              <button
+            <div className="flex gap-4">
+              <Button
                 type="button"
+                variant="outline"
+                size="lg"
                 onClick={resetForm}
-                className="w-full bg-gray-500 text-white py-3 px-6 rounded-xl hover:bg-gray-600 font-semibold text-sm transition-all"
+                className="flex-1 h-16 text-lg font-semibold"
               >
                 Wyczyść formularz
-              </button>
+              </Button>
+              
+              <Button
+                type="submit"
+                disabled={placeOrderMutation.isLoading || orderData.pizze.length === 0}
+                size="lg"
+                className="flex-1 h-16 text-lg font-semibold"
+              >
+                {placeOrderMutation.isLoading ? "Składanie..." : "Złóż zamówienie"}
+              </Button>
             </div>
           </form>
         </div>
