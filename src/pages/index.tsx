@@ -7,6 +7,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { Pizza, Phone, MapPin, CreditCard, Truck, ShoppingBag, Store } from "lucide-react";
+import toast, { Toaster } from 'react-hot-toast';
 
 interface PizzaSelection {
   id: number;
@@ -78,6 +79,11 @@ export default function Home() {
   const [keyboardType, setKeyboardType] = useState<'text' | 'numeric'>('text');
   const [capsLock, setCapsLock] = useState(false);
   const [showPolishChars, setShowPolishChars] = useState(false);
+  const [formModified, setFormModified] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [lastSelectedStreet, setLastSelectedStreet] = useState<string>("");
+  const [isSelectingFromList, setIsSelectingFromList] = useState(false);
   
   const numerDomuInputRef = useRef<HTMLInputElement>(null);
   const telefonInputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +127,119 @@ export default function Home() {
   const calculatePriceMutation = api.pizza.calculatePrice.useMutation();
   const placeOrderMutation = api.pizza.placeOrder.useMutation();
 
+  // Funkcja do składania zamówienia i drukowania paragonu
+  const handleSubmitAndPrint = async () => {
+    // Walidacja - tylko dla dowozu sprawdzamy telefon i adres
+    if (typZamowienia === "dowoz") {
+      if (!orderData.telefon.trim()) {
+        toast.error("Numer telefonu jest wymagany");
+        return;
+      }
+      
+      if (!ulica.trim()) {
+        toast.error("Nazwa ulicy jest wymagana");
+        return;
+      }
+      
+      if (!numerDomu.trim()) {
+        toast.error("Numer domu jest wymagany");
+        return;
+      }
+    }
+    
+    if (orderData.pizze.length === 0) {
+      toast.error("Dodaj przynajmniej jedną pizzę");
+      return;
+    }
+
+    try {
+      console.log("Składanie zamówienia z drukowaniem:", orderData);
+      
+      // Przygotuj obiekt modyfikacjeSkladnikow
+      const modyfikacjeSkladnikow: Record<string, Record<string, number>> = {};
+      orderData.pizze.forEach((pizza, index) => {
+        if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
+          const modsByName: Record<string, number> = {};
+          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+          
+          Object.entries(pizza.modifications).forEach(([skladnikIdStr, change]) => {
+            const skladnikId = parseInt(skladnikIdStr);
+            const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
+            if (skladnik) {
+              const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+              const baseCount = isBase ? 1 : 0;
+              const totalCount = baseCount + change;
+              
+              if (totalCount > 0) {
+                modsByName[skladnik.nazwa] = totalCount;
+              }
+            }
+          });
+          
+          if (Object.keys(modsByName).length > 0) {
+            modyfikacjeSkladnikow[index.toString()] = modsByName;
+          }
+        }
+      });
+      
+      // Sprawdź czy którakolwiek pizza ma isKupony = true
+      const hasKupony = orderData.pizze.some(p => p.isKupony === true);
+      
+      const result = await placeOrderMutation.mutateAsync({
+        telefon: orderData.telefon,
+        adres: orderData.adres,
+        pizze: orderData.pizze.map(p => ({ 
+          id: p.id, 
+          rozmiar: p.rozmiar,
+          isKupony: p.isKupony,
+          polNaPol: p.polNaPol
+        })),
+        sosy: orderData.sosy,
+        napojeIds: orderData.napojeIds,
+        pozycjeExtraIds: orderData.pozycjeExtraIds,
+        platnosc: orderData.platnosc,
+        isKupony: hasKupony || isKupony,
+        typZamowienia: typZamowienia,
+        skladniki: generateSkladnikiString(),
+        customDeliveryPrice: customDeliveryPrice ?? undefined,
+        sesjaId: (typZamowienia === "dowoz" && wybranaSesjaId) ? wybranaSesjaId : undefined,
+        modyfikacjeSkladnikow: Object.keys(modyfikacjeSkladnikow).length > 0 ? modyfikacjeSkladnikow : undefined,
+      });
+
+      console.log("Wynik zamówienia:", result);
+      
+      if (result && result.success) {
+        // Wywołaj endpoint drukowania
+        try {
+          const printResponse = await fetch('http://localhost:3006/api/print-latest', {
+            method: 'POST',
+          });
+          
+          if (printResponse.ok) {
+            toast.success(`Zamówienie złożone i paragon wydrukowany! Cena: ${result.cenaCalkwita} PLN`);
+          } else {
+            toast.success(`Zamówienie złożone (Cena: ${result.cenaCalkwita} PLN), ale błąd drukowania paragonu`);
+          }
+        } catch (printError) {
+          console.error("Błąd drukowania:", printError);
+          toast.success(`Zamówienie złożone (Cena: ${result.cenaCalkwita} PLN), ale błąd drukowania paragonu`);
+        }
+        
+        resetForm();
+      } else {
+        toast.error("Błąd podczas składania zamówienia");
+      }
+      
+    } catch (error) {
+      console.error("Szczegółowy błąd zamówienia:", error);
+      if (error instanceof Error) {
+        toast.error(`Błąd: ${error.message}`);
+      } else {
+        toast.error("Błąd podczas składania zamówienia. Spróbuj ponownie.");
+      }
+    }
+  };
+
   // Automatycznie ustaw sesję jeśli jest tylko jedna aktywna
   useEffect(() => {
     if (aktywneSesje && aktywneSesje.length === 1) {
@@ -130,13 +249,39 @@ export default function Home() {
     }
   }, [aktywneSesje]);
 
+  // Ostrzeżenie przed opuszczeniem strony jeśli formularz został zmodyfikowany
+  useEffect(() => {
+    // Sprawdź czy formularz został zmodyfikowany
+    const isModified = 
+      orderData.telefon.trim() !== "" ||
+      ulica.trim() !== "" ||
+      numerDomu.trim() !== "" ||
+      orderData.pizze.length > 0 ||
+      orderData.pozycjeExtraIds.length > 0 ||
+      orderData.napojeIds.length > 0 ||
+      orderData.sosy.pom > 0 ||
+      orderData.sosy.czos > 0;
+    
+    setFormModified(isModified);
+  }, [orderData, ulica, numerDomu]);
+
   // Aktualizuj sugestie ulic
   useEffect(() => {
     console.log("Street search data:", searchStreets.data);
+    
+    // Nie pokazuj sugestii jeśli użytkownik właśnie wybrał opcję z listy
+    if (isSelectingFromList) {
+      return;
+    }
+    
     if (searchStreets.data && searchStreets.data.length > 0) {
       // Przechowujemy obiekty z ulicą i dzielnicą
       setStreetSuggestions(searchStreets.data.filter((street: any) => street.ulica));
-      setShowSuggestions(true);
+      
+      // Pokaż sugestie tylko jeśli wartość nie jest równa ostatnio wybranej
+      if (ulica !== lastSelectedStreet && ulica.length >= 3) {
+        setShowSuggestions(true);
+      }
       setSelectedSuggestionIndex(-1); // Resetuj wybrany indeks
     } else {
       setStreetSuggestions([]);
@@ -145,7 +290,7 @@ export default function Home() {
       }
       setSelectedSuggestionIndex(-1);
     }
-  }, [searchStreets.data, ulica]);
+  }, [searchStreets.data, ulica, isSelectingFromList, lastSelectedStreet]);
 
   // Aktualizuj informacje o dzielnicy
   useEffect(() => {
@@ -420,11 +565,14 @@ export default function Home() {
   };
 
   const handleStreetSelect = (ulicaName: string) => {
+    setIsSelectingFromList(true);
+    setLastSelectedStreet(ulicaName);
     setUlica(ulicaName);
     setShowSuggestions(false);
     setSelectedSuggestionIndex(-1);
-    // Automatycznie przenosimy focus na pole numer domu
+    
     setTimeout(() => {
+      setIsSelectingFromList(false);
       numerDomuInputRef.current?.focus();
     }, 0);
   };
@@ -452,6 +600,28 @@ export default function Home() {
     setIsKupony(false);
     setShowPolNaPolSelector(false);
     setFirstPizzaId(null);
+    setFormModified(false);
+  };
+
+  const handleNavigation = (url: string) => {
+    if (formModified) {
+      setPendingNavigation(url);
+      setShowLeaveModal(true);
+    } else {
+      window.location.href = url;
+    }
+  };
+
+  const handleStay = () => {
+    setShowLeaveModal(false);
+    setPendingNavigation(null);
+  };
+
+  const handleLeave = () => {
+    setShowLeaveModal(false);
+    if (pendingNavigation) {
+      window.location.href = pendingNavigation;
+    }
   };
 
   const toggleIngredients = (index: number) => {
@@ -490,6 +660,94 @@ export default function Home() {
       newPizze[pizzaIndex] = { ...pizza, modifications: newMods };
       return { ...prev, pizze: newPizze };
     });
+  };
+
+  // Oblicz koszt modyfikacji składników dla pizzy
+  const calculateModificationCost = (pizza: PizzaSelection): number => {
+    if (!pizza.modifications || Object.keys(pizza.modifications).length === 0) {
+      return 0;
+    }
+
+    let totalCost = 0;
+    Object.entries(pizza.modifications).forEach(([idStr, change]) => {
+      const id = parseInt(idStr);
+      const skladnik = skladniki?.find((s: any) => s.id === id);
+      if (!skladnik) return;
+
+      // Sprawdź czy składnik był w bazie tej pizzy
+      const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+      const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
+
+      if (change > 0) {
+        // Dodanie składnika
+        if (isBase) {
+          // Dodatkowa porcja składnika bazowego - płatne
+          totalCost += change * (skladnik.cena || 0);
+        } else {
+          // Nowy składnik - płatne
+          totalCost += change * (skladnik.cena || 0);
+        }
+      }
+      // Usunięcie składnika nie zmienia ceny (change < 0)
+    });
+
+    return totalCost;
+  };
+
+  // Pobierz listę modyfikacji z cenami
+  const getModificationsList = (pizza: PizzaSelection): Array<{nazwa: string, cena: number}> => {
+    console.log("=== getModificationsList ===");
+    console.log("Pizza:", pizza.nazwa);
+    console.log("Pizza modifications:", pizza.modifications);
+    console.log("Skladniki loaded:", skladniki?.length || 0);
+    
+    if (!pizza.modifications || Object.keys(pizza.modifications).length === 0) {
+      console.log("Brak modyfikacji");
+      return [];
+    }
+
+    if (!skladniki || skladniki.length === 0) {
+      console.log("Skladniki nie załadowane");
+      return [];
+    }
+
+    const modifications: Array<{nazwa: string, cena: number | null}> = [];
+    
+    Object.entries(pizza.modifications).forEach(([idStr, change]) => {
+      console.log(`Processing modification: ID=${idStr}, Change=${change}`);
+      
+      if (change === 0) {
+        console.log("Change === 0, skipping");
+        return;
+      }
+      
+      const id = parseInt(idStr);
+      const skladnik = skladniki.find((s: any) => s.id === id);
+      
+      console.log(`Looked for ID ${id}, found:`, skladnik);
+      
+      if (skladnik && skladnik.nazwa) {
+        if (change > 0) {
+          // Addition - show with price
+          const cenaValue = skladnik.cena_srednia || 0;
+          console.log(`Added: ${skladnik.nazwa}, cena: ${cenaValue}`);
+          modifications.push({
+            nazwa: skladnik.nazwa,
+            cena: cenaValue
+          });
+        } else {
+          // Removal - show with minus sign, no price
+          console.log(`Removed: -${skladnik.nazwa}`);
+          modifications.push({
+            nazwa: `-${skladnik.nazwa}`,
+            cena: null
+          });
+        }
+      }
+    });
+
+    console.log("Final modifications:", modifications);
+    return modifications;
   };
 
   const generateSkladnikiString = () => {
@@ -543,23 +801,23 @@ export default function Home() {
     // Walidacja - tylko dla dowozu sprawdzamy telefon i adres
     if (typZamowienia === "dowoz") {
       if (!orderData.telefon.trim()) {
-        alert("Numer telefonu jest wymagany");
+        toast.error("Numer telefonu jest wymagany");
         return;
       }
       
       if (!ulica.trim()) {
-        alert("Nazwa ulicy jest wymagana");
+        toast.error("Nazwa ulicy jest wymagana");
         return;
       }
       
       if (!numerDomu.trim()) {
-        alert("Numer domu jest wymagany");
+        toast.error("Numer domu jest wymagany");
         return;
       }
     }
     
     if (orderData.pizze.length === 0) {
-      alert("Dodaj przynajmniej jedną pizzę");
+      toast.error("Dodaj przynajmniej jedną pizzę");
       return;
     }
 
@@ -621,18 +879,18 @@ export default function Home() {
       console.log("Wynik zamówienia:", result);
       
       if (result && result.success) {
-        alert(` Zamówienie złożone pomyślnie! Cena: ${result.cenaCalkwita} PLN`);
+        toast.success(` Zamówienie złożone pomyślnie! Cena: ${result.cenaCalkwita} PLN`);
         resetForm();
       } else {
-        alert(" Błąd podczas składania zamówienia");
+        toast.error(" Błąd podczas składania zamówienia");
       }
       
     } catch (error) {
       console.error("Szczegółowy błąd zamówienia:", error);
       if (error instanceof Error) {
-        alert(` Błąd: ${error.message}`);
+        toast.error(` Błąd: ${error.message}`);
       } else {
-        alert(" Błąd podczas składania zamówienia. Spróbuj ponownie.");
+        toast.error(" Błąd podczas składania zamówienia. Spróbuj ponownie.");
       }
     }
   };
@@ -640,51 +898,51 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>SmartPizzApp - Zamów Pizzę</title>
+        <title>PizzApp13 - Zamów Pizzę</title>
         <meta name="description" content="Aplikacja do zamawiania pizzy" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background py-8">
+      <main className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background py-3">
         <div className="container mx-auto max-w-7xl px-4">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <div className="flex items-center justify-center w-16 h-16 bg-primary rounded-full shadow-lg">
-                <Pizza className="w-9 h-9 text-primary-foreground" />
-              </div>
+              <img src="/logo.png" alt="PizzApp13 Logo" className="w-36 h-36 object-contain"/>
               <h1 className="text-5xl font-bold text-foreground tracking-tight">
-                SmartPizzApp
+                PizzApp13
               </h1>
             </div>
             <div className="flex gap-3">
               <Button
-                asChild
                 variant="default"
                 size="lg"
                 className="shadow-lg font-semibold"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleNavigation("http://localhost:3006");
+                }}
               >
-                <a href="http://localhost:3006">
-                  Orders Viewer
-                </a>
+                Orders Viewer
               </Button>
               <Button
-                asChild
                 variant="secondary"
                 size="lg"
                 className="shadow-lg font-semibold"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleNavigation("http://localhost:3006/kuchnia");
+                }}
               >
-                <a href="http://localhost:3006/kuchnia">
-                  🍳 Kuchnia
-                </a>
+                🍳 Kuchnia
               </Button>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-3">
             {/* Typ zamówienia */}
             <Card>
-              <CardHeader className="pb-4">
+              <CardHeader className="pb-2">
                 <CardTitle className="text-xl flex items-center gap-3 font-bold">
                   <Store className="w-6 h-6" />
                   Typ zamówienia
@@ -731,7 +989,6 @@ export default function Home() {
                     <Phone className="w-6 h-6" />
                     Dane kontaktowe
                   </CardTitle>
-                  <CardDescription className="text-base mt-1">Wypełnij dane do dostawy</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Telefon */}
@@ -769,21 +1026,21 @@ export default function Home() {
                   </div>
 
                   {/* Adres dostawy */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 mb-3">
-                      <MapPin className="w-6 h-6 text-muted-foreground" />
-                      <Label className="text-base font-semibold">Adres dostawy</Label>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 mb-4">
+                      <MapPin className="w-7 h-7 text-muted-foreground" />
+                      <Label className="text-lg font-bold">Adres dostawy</Label>
                     </div>
                     
                     {/* Wiersz 1: Dzielnica | Dodatkowe informacje */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-4">
                       {/* Dzielnica */}
                       <div className="space-y-2">
                         <Label htmlFor="dzielnica" className="text-sm font-semibold">Dzielnica</Label>
                         <select
                           id="dzielnica"
                           value={miejscowosc}
-                          className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           onChange={(e) => {
                             const newMiejscowosc = e.target.value;
                             setMiejscowosc(newMiejscowosc);
@@ -813,7 +1070,7 @@ export default function Home() {
                           id="dodatkowe"
                           ref={dodatkoweInfoInputRef}
                           type="text"
-                          className="h-12 text-base"
+                          className="h-11 text-base"
                           value={dodatkoweInfo}
                           onChange={(e) => setDodatkoweInfo(e.target.value)}
                           onFocus={(e) => {
@@ -838,7 +1095,7 @@ export default function Home() {
                     </div>
 
                     {/* Wiersz 2: Ulica / Nr / Mieszkanie */}
-                    <div className="flex gap-1.5 mb-1.5">
+                    <div className="flex gap-2 mb-2">
                     {/* Ulica - 75% szerokości */}
                     <div className="relative flex-[3]">
                       <input
@@ -847,15 +1104,21 @@ export default function Home() {
                         value={ulica}
                         onChange={(e) => {
                           const newValue = e.target.value;
-                          setPreviousUlica(ulica); // Zapisz poprzednią wartość przed zmianą
+                          setPreviousUlica(ulica);
                           setUlica(newValue);
-                          // Reset dzielnicy przy zmianie ulicy - aby backend szukał we wszystkich dzielnicach
                           setMiejscowosc("");
                           setUserManuallyChangedDzielnica(false);
                           
-                          // Pokaż sugestie tylko gdy użytkownik edytuje (wpisuje coś)
-                          if (newValue.length >= 3 && streetSuggestions.length > 0) {
+                          // Nie pokazuj sugestii gdy wartość jest ustawiana programowo (kliknięcie z listy)
+                          if (isSelectingFromList) {
+                            return;
+                          }
+                          
+                          // Pokaż sugestie tylko gdy użytkownik zmienia wybraną wcześniej ulicę
+                          if (newValue.length >= 3 && newValue !== lastSelectedStreet && streetSuggestions.length > 0) {
                             setShowSuggestions(true);
+                          } else if (newValue !== lastSelectedStreet) {
+                            setLastSelectedStreet("");
                           }
                         }}
                         onFocus={(e) => {
@@ -869,7 +1132,7 @@ export default function Home() {
                           setTimeout(() => {
                             input.setSelectionRange(input.value.length, input.value.length);
                           }, 0);
-                          // Nie pokazuj sugestii automatycznie przy fokusie - tylko przy edycji
+                          // NIE pokazuj sugestii przy fokusie - sugestie pokazują się tylko podczas wpisywania (onChange)
                         }}
                         onBlur={() => {
                           // Nie ukrywaj sugestii gdy klawiatura ekranowa jest widoczna
@@ -915,13 +1178,13 @@ export default function Home() {
                             setSelectedSuggestionIndex(-1);
                           }
                         }}
-                        className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+                        className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-lg transition-all h-16"
                         placeholder="Ulica"
                         required
                       />
                       {showSuggestions && streetSuggestions.length > 0 && (
                         <div 
-                          className="absolute z-[60] w-full bg-white border-2 border-gray-200 rounded-lg shadow-2xl bottom-full mb-1 max-h-60 overflow-y-auto"
+                          className="absolute z-[60] w-full bg-white border-2 border-gray-200 rounded-lg shadow-2xl bottom-full mb-1 max-h-72 overflow-y-auto"
                           onMouseDown={(e) => {
                             // Zapobiegaj blur na input gdy klikamy w sugestie
                             e.preventDefault();
@@ -932,14 +1195,14 @@ export default function Home() {
                               key={index}
                               type="button"
                               onClick={() => handleStreetSelect(street.ulica)}
-                              className={`w-full text-left px-3 py-2 transition-all flex justify-between items-center ${
+                              className={`w-full text-left px-4 py-3 transition-all flex justify-between items-center ${
                                 index === selectedSuggestionIndex
                                   ? 'bg-blue-50 border-2 border-blue-400'
                                   : 'hover:bg-gray-50 border-2 border-transparent'
                               }`}
                             >
-                              <span className="font-semibold text-gray-900 text-sm">{street.ulica}</span>
-                              <span className="text-xs text-gray-600 ml-2">({street.dzielnica_nazwa})</span>
+                              <span className="font-semibold text-gray-900 text-base">{street.ulica}</span>
+                              <span className="text-sm text-gray-600 ml-2">({street.dzielnica_nazwa})</span>
                             </button>
                           ))}
                         </div>
@@ -975,7 +1238,7 @@ export default function Home() {
                             e.preventDefault();
                           }
                         }}
-                        className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+                        className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-lg transition-all h-16"
                         placeholder="Nr"
                         required
                       />
@@ -1005,7 +1268,7 @@ export default function Home() {
                             e.preventDefault();
                           }
                         }}
-                        className="w-full p-1.5 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+                        className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-lg transition-all h-16"
                         placeholder="Mieszkanie"
                       />
                     </div>
@@ -1639,6 +1902,11 @@ export default function Home() {
                             <Badge variant="secondary">{pizza.rozmiar}</Badge>
                             <Badge variant="outline">{pizza.cena} PLN</Badge>
                             {pizza.isKupony && <Badge>KUPONY</Badge>}
+                            {getModificationsList(pizza).map((mod, idx) => (
+                              <Badge key={idx} variant="default" className={mod.cena === null ? "bg-red-500" : "bg-orange-500"}>
+                                {mod.cena === null ? mod.nazwa : `${mod.nazwa} +${mod.cena.toFixed(2)} PLN`}
+                              </Badge>
+                            ))}
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -1906,82 +2174,70 @@ export default function Home() {
 
             {/* Sosy */}
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-bold">Sosy (2 PLN/szt)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-base font-semibold">Sos pomidorowy</Label>
-                    <div className="flex gap-2 items-center">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-6">
+                  <span className="text-base font-bold text-muted-foreground whitespace-nowrap">Sosy (2 PLN/szt)</span>
+                  
+                  {/* Sos pomidorowy */}
+                  <div className="flex items-center gap-3 bg-secondary/30 rounded-lg px-4 py-2">
+                    <span className="text-sm font-semibold whitespace-nowrap">Pomidorowy</span>
+                    <div className="flex items-center gap-2">
                       <Button
                         type="button"
                         variant="outline"
-                        size="default"
+                        size="lg"
                         onClick={() => setOrderData(prev => ({
                           ...prev,
                           sosy: { ...prev.sosy, pom: Math.max(0, prev.sosy.pom - 1) }
                         }))}
-                        className="w-12 h-12 text-xl font-bold"
+                        className="w-12 h-12 text-2xl font-bold rounded-full"
                       >
                         −
                       </Button>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={orderData.sosy.pom}
-                        onChange={(e) => setOrderData(prev => ({
-                          ...prev,
-                          sosy: { ...prev.sosy, pom: parseInt(e.target.value) || 0 }
-                        }))}
-                        className="w-20 h-12 text-center text-lg font-bold"
-                      />
+                      <div className="w-16 h-12 flex items-center justify-center bg-background rounded-md border-2">
+                        <span className="text-2xl font-bold">{orderData.sosy.pom}</span>
+                      </div>
                       <Button
                         type="button"
-                        size="default"
+                        size="lg"
                         onClick={() => setOrderData(prev => ({
                           ...prev,
                           sosy: { ...prev.sosy, pom: prev.sosy.pom + 1 }
                         }))}
-                        className="w-12 h-12 text-xl font-bold"
+                        className="w-12 h-12 text-2xl font-bold rounded-full"
                       >
                         +
                       </Button>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-base font-semibold">Sos czosnkowy</Label>
-                    <div className="flex gap-2 items-center">
+
+                  {/* Sos czosnkowy */}
+                  <div className="flex items-center gap-3 bg-secondary/30 rounded-lg px-4 py-2">
+                    <span className="text-sm font-semibold whitespace-nowrap">Czosnkowy</span>
+                    <div className="flex items-center gap-2">
                       <Button
                         type="button"
                         variant="outline"
-                        size="default"
+                        size="lg"
                         onClick={() => setOrderData(prev => ({
                           ...prev,
                           sosy: { ...prev.sosy, czos: Math.max(0, prev.sosy.czos - 1) }
                         }))}
-                        className="w-12 h-12 text-xl font-bold"
+                        className="w-12 h-12 text-2xl font-bold rounded-full"
                       >
                         −
                       </Button>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={orderData.sosy.czos}
-                        onChange={(e) => setOrderData(prev => ({
-                          ...prev,
-                          sosy: { ...prev.sosy, czos: parseInt(e.target.value) || 0 }
-                        }))}
-                        className="w-20 h-12 text-center text-lg font-bold"
-                      />
+                      <div className="w-16 h-12 flex items-center justify-center bg-background rounded-md border-2">
+                        <span className="text-2xl font-bold">{orderData.sosy.czos}</span>
+                      </div>
                       <Button
                         type="button"
-                        size="default"
+                        size="lg"
                         onClick={() => setOrderData(prev => ({
                           ...prev,
                           sosy: { ...prev.sosy, czos: prev.sosy.czos + 1 }
                         }))}
-                        className="w-12 h-12 text-xl font-bold"
+                        className="w-12 h-12 text-2xl font-bold rounded-full"
                       >
                         +
                       </Button>
@@ -1997,7 +2253,6 @@ export default function Home() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg font-bold">Pozycje extra</CardTitle>
-                  <CardDescription className="text-sm">Opcjonalnie</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {orderData.pozycjeExtraIds.map((extraId, index) => {
@@ -2059,7 +2314,6 @@ export default function Home() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg font-bold">Napoje</CardTitle>
-                  <CardDescription className="text-sm">Opcjonalnie</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {orderData.napojeIds.map((napojId, index) => {
@@ -2212,7 +2466,7 @@ export default function Home() {
                 variant="outline"
                 size="lg"
                 onClick={resetForm}
-                className="flex-1 h-16 text-lg font-semibold"
+                className="w-48 h-16 text-lg font-semibold flex-shrink-0"
               >
                 Wyczyść formularz
               </Button>
@@ -2225,10 +2479,100 @@ export default function Home() {
               >
                 {placeOrderMutation.isLoading ? "Składanie..." : "Złóż zamówienie"}
               </Button>
+
+              <Button
+                type="button"
+                disabled={placeOrderMutation.isLoading || orderData.pizze.length === 0}
+                size="lg"
+                onClick={handleSubmitAndPrint}
+                className="flex-1 h-16 text-lg font-semibold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+              >
+                {placeOrderMutation.isLoading ? "Składanie..." : "Złóż + Drukuj paragon"}
+              </Button>
             </div>
           </form>
         </div>
       </main>
+
+      {/* Custom Leave Modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop with blur */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={handleStay}
+          />
+          
+          {/* Modal Content */}
+          <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 z-10">
+            <div className="text-center">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                  Czy na pewno chcesz opuścić formularz?
+                </h2>
+                <p className="text-lg text-gray-600">
+                  Dane zostaną wyczyszczone
+                </p>
+              </div>
+              
+              <div className="flex gap-4 justify-center">
+                <button
+                  onClick={handleStay}
+                  className="px-8 py-4 bg-white text-black border-2 border-gray-300 rounded-xl font-bold text-lg hover:bg-gray-50 hover:border-gray-400 transition-all shadow-md"
+                >
+                  Zostań
+                </button>
+                <button
+                  onClick={handleLeave}
+                  className="px-8 py-4 bg-red-600 text-white rounded-xl font-bold text-lg hover:bg-red-700 transition-all shadow-md"
+                >
+                  Opuść
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Toaster
+        position="top-left"
+        toastOptions={{
+          duration: 5000,
+          style: {
+            background: 'white',
+            color: '#1f2937',
+            padding: '24px 32px',
+            borderRadius: '16px',
+            fontSize: '20px',
+            fontWeight: '700',
+            maxWidth: '700px',
+            minHeight: '80px',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+          },
+          success: {
+            iconTheme: {
+              primary: 'hsl(25 95% 53%)',
+              secondary: 'white',
+            },
+            style: {
+              border: '3px solid hsl(25 95% 53%)',
+              boxShadow: '0 20px 50px rgba(249, 115, 22, 0.4)',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: 'white',
+            },
+            style: {
+              border: '3px solid #ef4444',
+              boxShadow: '0 20px 50px rgba(239, 68, 68, 0.4)',
+            },
+          },
+        }}
+      />
     </>
   );
 }

@@ -651,7 +651,7 @@ const server = http.createServer(async (req, res) => {
     
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #ffffff;
       min-height: 100vh;
       padding: 20px;
     }
@@ -663,10 +663,10 @@ const server = http.createServer(async (req, res) => {
       color: white;
       margin-bottom: 30px;
       padding: 20px 30px;
-      background: rgba(255,255,255,0.1);
-      backdrop-filter: blur(10px);
+      background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%);
+      
       border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 20px rgba(249, 115, 22, 0.3);
     }
     
     .header > div:first-child {
@@ -707,12 +707,12 @@ const server = http.createServer(async (req, res) => {
     
     .status-tab {
       flex: 1;
-      padding: 16px 20px;
+      padding: 18px 24px;
       text-align: center;
       font-weight: 700;
-      font-size: 0.95em;
+      font-size: 1em;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.8px;
       cursor: pointer;
       border: none;
       background: transparent;
@@ -720,9 +720,13 @@ const server = http.createServer(async (req, res) => {
     }
     
     .status-tab.active {
-      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%);
       color: white;
       box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2);
+    }
+    
+    .status-tab.active.to-prep {
+      background: linear-gradient(135deg, #7c2d12 0%, #991b1b 100%);
     }
     
     .status-tab.active.in-progress {
@@ -808,17 +812,17 @@ const server = http.createServer(async (req, res) => {
     
     .pizza-item {
       background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-      padding: 12px 16px;
+      padding: 14px 18px;
       margin: 8px 0;
       border-radius: 10px;
-      border-left: 4px solid #8b5cf6;
+      border-left: 4px solid hsl(25 95% 53%);
       box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
     
     .pizza-name {
       font-weight: 700;
       color: #1f2937;
-      font-size: 1.1em;
+      font-size: 1.15em;
     }
     
     .pizza-size {
@@ -853,23 +857,23 @@ const server = http.createServer(async (req, res) => {
     
     .action-btn {
       flex: 1;
-      padding: 14px 20px;
+      padding: 16px 24px;
       border: none;
       border-radius: 10px;
       font-weight: 700;
-      font-size: 1em;
+      font-size: 1.05em;
       cursor: pointer;
       transition: all 0.3s ease;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      letter-spacing: 0.8px;
+      background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%);
       color: white;
-      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+      box-shadow: 0 4px 12px rgba(255, 123, 0, 0.3);
     }
     
     .action-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+      box-shadow: 0 6px 16px rgba(255, 123, 0, 0.4);
     }
     
     .empty-state {
@@ -887,16 +891,16 @@ const server = http.createServer(async (req, res) => {
     .refresh-btn {
       background: white;
       border: none;
-      color: #667eea;
-      padding: 12px 24px;
+      color: hsl(25 95% 53%);
+      padding: 14px 28px;
       border-radius: 12px;
-      font-size: 0.95em;
+      font-size: 1em;
       font-weight: 700;
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       transition: all 0.2s ease;
       text-transform: none;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.5px;
       display: inline-flex;
       align-items: center;
       gap: 8px;
@@ -918,12 +922,12 @@ const server = http.createServer(async (req, res) => {
       top: 20px;
       right: 20px;
       background: white;
-      padding: 12px 24px;
+      padding: 14px 28px;
       border-radius: 24px;
       box-shadow: 0 6px 20px rgba(0,0,0,0.2);
       font-weight: 700;
-      color: #667eea;
-      font-size: 0.9em;
+      color: hsl(25 95% 53%);
+      font-size: 1em;
     }
   </style>
 </head>
@@ -934,24 +938,33 @@ const server = http.createServer(async (req, res) => {
       <p class="subtitle">System Organizacji Zamowien</p>
     </div>
     <div style="display: flex; gap: 12px; align-items: center;">
+      <a href="http://localhost:3006" class="refresh-btn" style="text-decoration: none;">
+        Orders Viewer
+      </a>
       <a href="http://localhost:3000" class="refresh-btn" style="text-decoration: none;">
-        📝 Formularz Zamowienia
+        Formularz Zamowienia
+      </a>
+      <a href="/kuchnia/historia" class="refresh-btn" style="text-decoration: none;">
+        Historia
       </a>
       <button class="refresh-btn" onclick="loadOrders()">
-        🔄 Odswież
+        Odswież
       </button>
     </div>
   </div>
   
   <div class="orders-container" id="ordersContainer">
     <div class="empty-state">
-      <div class="empty-state-icon">👨‍🍳</div>
+      <div class="empty-state-icon"></div>
       <p>Ladowanie zamowien...</p>
     </div>
   </div>
   
   <script>
     let lastUpdate = Date.now();
+    
+    let allSkladniki = [];
+    let allPizzaSkladnik = [];
     
     async function loadOrders() {
       try {
@@ -960,11 +973,14 @@ const server = http.createServer(async (req, res) => {
         const data = await response.json();
         console.log('Otrzymano zamowien:', data.orders.length);
         
+        allSkladniki = data.skladniki || [];
+        allPizzaSkladnik = data.pizzaSkladnik || [];
+        
         renderOrders(data.orders, data.pizzas);
         lastUpdate = Date.now();
       } catch (error) {
         console.error('Blad ladowania zamowien:', error);
-        document.getElementById('ordersContainer').innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Blad ladowania: ' + error.message + '</p></div>';
+        document.getElementById('ordersContainer').innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><p>Blad ladowania: ' + error.message + '</p></div>';
       }
     }
     
@@ -987,7 +1003,7 @@ const server = http.createServer(async (req, res) => {
         console.log('Zamowienia wyrenderowane');
       } catch (error) {
         console.error('Blad renderowania:', error);
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Blad: ' + error.message + '</p></div>';
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><p>Blad: ' + error.message + '</p></div>';
       }
     }
     
@@ -1001,20 +1017,71 @@ const server = http.createServer(async (req, res) => {
         if (order.pizze) {
           try {
             const pizzeArray = JSON.parse(order.pizze);
-            pizzaHtml = pizzeArray.map(pizza => {
+            
+            // Parsuj modyfikacje z pola skladniki (format: "NAZWA_PIZZY: +skladnik1, -skladnik2")
+            let modyfikacjeMap = {};
+            if (order.skladniki && typeof order.skladniki === 'string' && order.skladniki.trim() !== '') {
+              const modLines = order.skladniki.split('\\n');
+              modLines.forEach(line => {
+                const match = line.match(/^(.+?):\s*(.+)$/);
+                if (match) {
+                  const pizzaNazwa = match[1].trim().toUpperCase();
+                  const mods = match[2].trim();
+                  modyfikacjeMap[pizzaNazwa] = mods;
+                }
+              });
+            }
+            
+            pizzaHtml = pizzeArray.map((pizza, idx) => {
               const pizzaData = pizzas.find(p => p.id === pizza.id);
               const pizzaName = pizzaData ? pizzaData.nazwa : 'Pizza ID:' + pizza.id;
-              return '<div class="pizza-item"><span class="pizza-name">' + pizzaName + '</span><span class="pizza-size">[' + pizza.rozmiar + ']</span></div>';
+              
+              // Pobierz składniki dla tej pizzy
+              let skladnikiHtml = '';
+              if (pizzaData && allPizzaSkladnik.length > 0) {
+                const pizzaSkladnikiIds = allPizzaSkladnik
+                  .filter(ps => ps.id_pizza === pizzaData.id)
+                  .map(ps => ps.id_skladnik);
+                const pizzaSkladniki = allSkladniki
+                  .filter(s => pizzaSkladnikiIds.includes(s.id))
+                  .map(s => s.nazwa);
+                if (pizzaSkladniki.length > 0) {
+                  skladnikiHtml = '<div style="font-size: 0.85em; color: #6b7280; margin-top: 4px; line-height: 1.4;">' + pizzaSkladniki.join(', ') + '</div>';
+                }
+              }
+              
+              // Sprawdź czy są modyfikacje dla tej pizzy
+              let modyfikacjeHtml = '';
+              const pizzaNazwaUpper = pizzaName.toUpperCase();
+              
+              if (modyfikacjeMap[pizzaNazwaUpper]) {
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>' + modyfikacjeMap[pizzaNazwaUpper] + '</div>';
+              }
+              
+              // Obsługa dodanych składników z JSON (fallback)
+              if (!modyfikacjeHtml && pizza.dodane && Array.isArray(pizza.dodane) && pizza.dodane.length > 0) {
+                const dodaneNazwy = pizza.dodane.map(idSkladnik => {
+                  const skladnik = allSkladniki.find(s => s.id === idSkladnik);
+                  return skladnik ? skladnik.nazwa : 'ID:' + idSkladnik;
+                });
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>+ ' + dodaneNazwy.join(', ') + '</div>';
+              }
+              
+              // Obsługa usuniętych składników z JSON (fallback)
+              if (!modyfikacjeHtml && pizza.usuniete && Array.isArray(pizza.usuniete) && pizza.usuniete.length > 0) {
+                const usunietaNazwy = pizza.usuniete.map(idSkladnik => {
+                  const skladnik = allSkladniki.find(s => s.id === idSkladnik);
+                  return skladnik ? skladnik.nazwa : 'ID:' + idSkladnik;
+                });
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>- ' + usunietaNazwy.join(', ') + '</div>';
+              }
+              
+              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.15em;">' + pizzaName + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span></div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
             }).join('');
           } catch (e) {
             console.error('Blad parsowania pizze:', e);
             pizzaHtml = '<div class="pizza-item">Blad odczytu pizzy</div>';
           }
-        }
-        
-        let modificationsHtml = '';
-        if (order.skladniki && order.skladniki.trim() !== '') {
-          modificationsHtml = '<div class="modifications"><strong>⚠️ Modyfikacje:</strong> ' + order.skladniki + '</div>';
         }
         
         let addressHtml = '';
@@ -1025,7 +1092,7 @@ const server = http.createServer(async (req, res) => {
         
         return '<div class="order-card">' +
           '<div class="status-tabs">' +
-            '<button class="status-tab ' + (currentStatus === 'do_przygotowania' ? 'active' : '') + '" onclick="updateStatus(' + order.id + ', &apos;do_przygotowania&apos;)">Do przygotowania</button>' +
+            '<button class="status-tab to-prep ' + (currentStatus === 'do_przygotowania' ? 'active' : '') + '" onclick="updateStatus(' + order.id + ', &apos;do_przygotowania&apos;)">Do przygotowania</button>' +
             '<button class="status-tab in-progress ' + (currentStatus === 'w_trakcie' ? 'active' : '') + '" onclick="updateStatus(' + order.id + ', &apos;w_trakcie&apos;)">W trakcie</button>' +
             '<button class="status-tab done ' + (currentStatus === 'gotowe' ? 'active' : '') + '" onclick="updateStatus(' + order.id + ', &apos;gotowe&apos;)">Gotowe</button>' +
           '</div>' +
@@ -1038,7 +1105,6 @@ const server = http.createServer(async (req, res) => {
             '<div class="order-details">' +
               addressHtml +
               '<div class="pizza-list">' + pizzaHtml + '</div>' +
-              modificationsHtml +
               '<div class="detail-row"><span class="detail-label">Cena:</span> ' + order.cena_calkowita + ' PLN</div>' +
               '<div class="detail-row"><span class="detail-label">Platnosc:</span> ' + order.platnosc + '</div>' +
             '</div>' +
@@ -1064,11 +1130,11 @@ const server = http.createServer(async (req, res) => {
         if (response.ok) {
           loadOrders();
         } else {
-          alert('Blad aktualizacji statusu');
+          showToast('Blad aktualizacji statusu', 'error');
         }
       } catch (error) {
         console.error('Blad:', error);
-        alert('Blad polaczenia');
+        showToast('Blad polaczenia', 'error');
       }
     }
     
@@ -1082,14 +1148,54 @@ const server = http.createServer(async (req, res) => {
         
         const result = await response.json();
         if (response.ok) {
-          alert('Paragon wydrukowany!');
+          showToast('Paragon wydrukowany!', 'success');
         } else {
-          alert('Blad drukowania: ' + result.error);
+          showToast('Blad drukowania: ' + result.error, 'error');
         }
       } catch (error) {
         console.error('Blad drukowania:', error);
-        alert('Blad polaczenia z drukarką');
+        showToast('Blad polaczenia z drukarką', 'error');
       }
+    }
+    
+    // Toast notification function
+    function showToast(message, type) {
+      const toast = document.createElement('div');
+      let bgColor = 'hsl(25 95% 53%)';
+      if (type === 'error') bgColor = '#ef4444';
+      if (type === 'warning') bgColor = '#404040';
+      
+      toast.style.position = 'fixed';
+      toast.style.top = '50%';
+      toast.style.left = '50%';
+      toast.style.transform = 'translate(-50%, -50%)';
+      toast.style.background = bgColor;
+      toast.style.color = 'white';
+      toast.style.padding = '24px 32px';
+      toast.style.borderRadius = '12px';
+      toast.style.fontSize = '16px';
+      toast.style.fontWeight = '500';
+      toast.style.boxShadow = '0 10px 40px rgba(0, 0, 0, 0.3)';
+      toast.style.zIndex = '10000';
+      toast.style.maxWidth = '90%';
+      toast.style.textAlign = 'center';
+      toast.style.animation = 'slideIn 0.3s ease-out';
+      
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Add animation styles if not already present
+    if (!document.getElementById('toast-animations')) {
+      const style = document.createElement('style');
+      style.id = 'toast-animations';
+      style.textContent = '@keyframes slideIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } } @keyframes slideOut { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } }';
+      document.head.appendChild(style);
     }
     
     // Initial load
@@ -1113,11 +1219,11 @@ const server = http.createServer(async (req, res) => {
         database: 'SmartPizzApp13'
       });
       
-      // Pobierz zamówienia z dzisiaj które nie są archiwalne (gotowe starsze niż 1h ukrywamy)
+      // Pobierz zamówienia aktywne (nie gotowe) lub ostatnio zaktualizowane
       const [orders] = await connection.execute(
         `SELECT z.* FROM zamowienia z 
-         WHERE DATE(z.created_at) = CURDATE()
-         AND (z.status_kuchnia != 'gotowe' OR z.updated_at > DATE_SUB(NOW(), INTERVAL 1 HOUR))
+         WHERE (z.status_kuchnia != 'gotowe' AND DATE(z.updated_at) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY))
+         OR (z.status_kuchnia = 'gotowe' AND z.updated_at > DATE_SUB(NOW(), INTERVAL 1 HOUR))
          ORDER BY 
            CASE z.status_kuchnia
              WHEN 'do_przygotowania' THEN 1
@@ -1129,8 +1235,12 @@ const server = http.createServer(async (req, res) => {
       
       const [pizzas] = await connection.execute('SELECT * FROM menu_pizza');
       
+      // Pobierz składniki dla wszystkich pizz
+      const [skladniki] = await connection.execute('SELECT * FROM skladniki');
+      const [pizzaSkladnik] = await connection.execute('SELECT * FROM relacja_skladniki');
+      
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ orders, pizzas }));
+      res.end(JSON.stringify({ orders, pizzas, skladniki, pizzaSkladnik }));
       
       if (connection) await connection.end();
     } catch (error) {
@@ -1179,6 +1289,516 @@ const server = http.createServer(async (req, res) => {
         if (connection) await connection.end();
       }
     });
+    return;
+  }
+  
+  // API: Historia zamówień - ostatnie 15 gotowych
+  if (pathname === '/api/kuchnia/historia' && req.method === 'GET') {
+    let connection;
+    try {
+      connection = await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'Pepperoni13',
+        database: 'SmartPizzApp13'
+      });
+      
+      // Pobierz ostatnie 15 zamówień ze statusem 'gotowe', posortowane po updated_at (najnowsze na górze)
+      const [orders] = await connection.execute(
+        `SELECT z.* FROM zamowienia z 
+         WHERE z.status_kuchnia = 'gotowe'
+         ORDER BY z.updated_at DESC
+         LIMIT 15`
+      );
+      
+      const [pizzas] = await connection.execute('SELECT * FROM menu_pizza');
+      
+      // Pobierz składniki dla wszystkich pizz
+      const [skladniki] = await connection.execute('SELECT * FROM skladniki');
+      const [pizzaSkladnik] = await connection.execute('SELECT * FROM relacja_skladniki');
+      
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ orders, pizzas, skladniki, pizzaSkladnik }));
+      
+      if (connection) await connection.end();
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: error.message }));
+      if (connection) await connection.end();
+    }
+    return;
+  }
+  
+  // Strona historii zamówień
+  if (pathname === '/kuchnia/historia') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    const historiaHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Historia Zamówień - Ostatnie Gotowe</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+      background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: white;
+      margin-bottom: 30px;
+      padding: 20px 30px;
+      background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%);
+      
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(249, 115, 22, 0.3);
+    }
+    
+    .header > div:first-child {
+      text-align: left;
+    }
+    
+    .header h1 {
+      font-size: 2.5em;
+      font-weight: 800;
+      margin-bottom: 8px;
+      text-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    .header .subtitle {
+      font-size: 1.1em;
+      opacity: 0.9;
+    }
+    
+    .orders-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .order-card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #f3f4f6;
+    }
+    
+    .order-id {
+      font-size: 1.5em;
+      font-weight: 800;
+      color: #1f2937;
+    }
+    
+    .order-time {
+      font-size: 0.9em;
+      color: #6b7280;
+      font-weight: 600;
+    }
+    
+    .finished-time {
+      background: #d1fae5;
+      color: #065f46;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.85em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: inline-block;
+    }
+    
+    .order-type {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.8em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    
+    .order-type.dowoz {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    
+    .order-type.na_wynos {
+      background: #fed7aa;
+      color: #92400e;
+    }
+    
+    .order-type.na_miejscu {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    
+    .order-details {
+      margin: 16px 0;
+    }
+    
+    .detail-row {
+      margin: 10px 0;
+      font-size: 1em;
+      color: #374151;
+      line-height: 1.6;
+    }
+    
+    .detail-label {
+      font-weight: 700;
+      color: #1f2937;
+      display: inline-block;
+      min-width: 90px;
+    }
+    
+    .pizza-list {
+      margin: 16px 0;
+    }
+    
+    .pizza-item {
+      background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+      padding: 14px 18px;
+      margin: 8px 0;
+      border-radius: 10px;
+      border-left: 4px solid hsl(25 95% 53%);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    
+    .pizza-name {
+      font-weight: 700;
+      color: #1f2937;
+      font-size: 1.15em;
+    }
+    
+    .pizza-size {
+      color: #6b7280;
+      font-size: 0.9em;
+      margin-left: 10px;
+      font-weight: 600;
+    }
+    
+    .modifications {
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: #fef3c7;
+      border-radius: 6px;
+      font-size: 0.9em;
+      color: #92400e;
+      border-left: 3px solid #f59e0b;
+    }
+    
+    .modifications strong {
+      color: #78350f;
+      font-weight: 700;
+    }
+    
+    .restore-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 2px solid #f3f4f6;
+    }
+    
+    .restore-btn {
+      flex: 1;
+      padding: 16px 24px;
+      border: none;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1.05em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    .restore-btn.to-prep {
+      background: linear-gradient(135deg, #7c2d12 0%, #991b1b 100%);
+    }
+    
+    .restore-btn.to-prep:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(124, 45, 18, 0.4);
+    }
+    
+    .restore-btn.to-progress {
+      background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+    }
+    
+    .restore-btn.to-progress:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(30, 64, 175, 0.4);
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: white;
+      font-size: 1.2em;
+    }
+    
+    .empty-state-icon {
+      font-size: 4em;
+      margin-bottom: 16px;
+    }
+    
+    .refresh-btn {
+      background: white;
+      border: none;
+      color: hsl(25 95% 53%);
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-size: 1em;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transition: all 0.2s ease;
+      text-transform: none;
+      letter-spacing: 0.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .refresh-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      background: rgba(255,255,255,0.95);
+    }
+    
+    .refresh-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Historia Zamówień</h1>
+      <p class="subtitle">Ostatnie 15 Gotowych Zamówień</p>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <a href="/kuchnia" class="refresh-btn" style="text-decoration: none;">
+         Panel Kuchni
+      </a>
+      <button class="refresh-btn" onclick="loadHistory()">
+        Odśwież
+      </button>
+    </div>
+  </div>
+  
+  <div class="orders-container" id="ordersContainer">
+    <div class="empty-state">
+      <div class="empty-state-icon">📦</div>
+      <p>Ładowanie historii...</p>
+    </div>
+  </div>
+  
+  <script>
+    let allSkladniki = [];
+    let allPizzaSkladnik = [];
+    
+    async function loadHistory() {
+      try {
+        console.log('Ładowanie historii...');
+        const response = await fetch('/api/kuchnia/historia');
+        const data = await response.json();
+        console.log('Otrzymano zamówień:', data.orders.length);
+        
+        allSkladniki = data.skladniki || [];
+        allPizzaSkladnik = data.pizzaSkladnik || [];
+        
+        renderOrders(data.orders, data.pizzas);
+      } catch (error) {
+        console.error('Błąd ładowania historii:', error);
+        document.getElementById('ordersContainer').innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><p>Błąd ładowania: ' + error.message + '</p></div>';
+      }
+    }
+    
+    function renderOrders(orders, pizzas) {
+      const container = document.getElementById('ordersContainer');
+      console.log('Renderowanie zamówień:', orders.length);
+      
+      if (orders.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><p>Brak zamówień w historii</p></div>';
+        return;
+      }
+      
+      try {
+        container.innerHTML = orders.map(order => renderOrderCard(order, pizzas)).join('');
+        console.log('Zamówienia wyrenderowane');
+      } catch (error) {
+        console.error('Błąd renderowania:', error);
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><p>Błąd: ' + error.message + '</p></div>';
+      }
+    }
+    
+    function renderOrderCard(order, pizzas) {
+      try {
+        const typeMap = { 'na_miejscu': 'Na miejscu', 'na_wynos': 'Na wynos', 'dowoz': 'Dowóz' };
+        const orderTime = new Date(order.created_at).toLocaleString('pl-PL');
+        const finishedTime = new Date(order.updated_at).toLocaleString('pl-PL');
+        
+        let pizzaHtml = '';
+        if (order.pizze) {
+          try {
+            const pizzeArray = JSON.parse(order.pizze);
+            
+            // Parsuj modyfikacje z pola skladniki (format: "NAZWA_PIZZY: +skladnik1, -skladnik2")
+            let modyfikacjeMap = {};
+            if (order.skladniki && typeof order.skladniki === 'string' && order.skladniki.trim() !== '') {
+              const modLines = order.skladniki.split('\\n');
+              modLines.forEach(line => {
+                const match = line.match(/^(.+?):\s*(.+)$/);
+                if (match) {
+                  const pizzaNazwa = match[1].trim().toUpperCase();
+                  const mods = match[2].trim();
+                  modyfikacjeMap[pizzaNazwa] = mods;
+                }
+              });
+            }
+            
+            pizzaHtml = pizzeArray.map((pizza, idx) => {
+              const pizzaData = pizzas.find(p => p.id === pizza.id);
+              const pizzaName = pizzaData ? pizzaData.nazwa : 'Pizza ID:' + pizza.id;
+              
+              // Pobierz składniki dla tej pizzy
+              let skladnikiHtml = '';
+              if (pizzaData && allPizzaSkladnik.length > 0) {
+                const pizzaSkladnikiIds = allPizzaSkladnik
+                  .filter(ps => ps.id_pizza === pizzaData.id)
+                  .map(ps => ps.id_skladnik);
+                const pizzaSkladniki = allSkladniki
+                  .filter(s => pizzaSkladnikiIds.includes(s.id))
+                  .map(s => s.nazwa);
+                if (pizzaSkladniki.length > 0) {
+                  skladnikiHtml = '<div style="font-size: 0.85em; color: #6b7280; margin-top: 4px; line-height: 1.4;">' + pizzaSkladniki.join(', ') + '</div>';
+                }
+              }
+              
+              // Sprawdź czy są modyfikacje dla tej pizzy
+              let modyfikacjeHtml = '';
+              const pizzaNazwaUpper = pizzaName.toUpperCase();
+              
+              if (modyfikacjeMap[pizzaNazwaUpper]) {
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>' + modyfikacjeMap[pizzaNazwaUpper] + '</div>';
+              }
+              
+              // Obsługa dodanych składników z JSON (fallback)
+              if (!modyfikacjeHtml && pizza.dodane && Array.isArray(pizza.dodane) && pizza.dodane.length > 0) {
+                const dodaneNazwy = pizza.dodane.map(idSkladnik => {
+                  const skladnik = allSkladniki.find(s => s.id === idSkladnik);
+                  return skladnik ? skladnik.nazwa : 'ID:' + idSkladnik;
+                });
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>+ ' + dodaneNazwy.join(', ') + '</div>';
+              }
+              
+              // Obsługa usuniętych składników z JSON (fallback)
+              if (!modyfikacjeHtml && pizza.usuniete && Array.isArray(pizza.usuniete) && pizza.usuniete.length > 0) {
+                const usunietaNazwy = pizza.usuniete.map(idSkladnik => {
+                  const skladnik = allSkladniki.find(s => s.id === idSkladnik);
+                  return skladnik ? skladnik.nazwa : 'ID:' + idSkladnik;
+                });
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>- ' + usunietaNazwy.join(', ') + '</div>';
+              }
+              
+              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.15em;">' + pizzaName + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span></div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
+            }).join('');
+          } catch (e) {
+            console.error('Błąd parsowania pizze:', e);
+            pizzaHtml = '<div class="pizza-item">Błąd odczytu pizzy</div>';
+          }
+        }
+        
+        let addressHtml = '';
+        if (order.typ_zamowienia === 'dowoz') {
+          addressHtml = '<div class="detail-row"><span class="detail-label">Telefon:</span> ' + (order.telefon || '-') + '</div>' +
+                        '<div class="detail-row"><span class="detail-label">Adres:</span> ' + (order.adres || '-') + '</div>';
+        }
+        
+        return '<div class="order-card">' +
+          '<div class="order-header">' +
+            '<div class="order-id">#' + order.id + '</div>' +
+            '<div>' +
+              '<div class="order-time">Utworzono: ' + orderTime + '</div>' +
+              '<div class="finished-time">✅ Gotowe: ' + finishedTime + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="order-type ' + order.typ_zamowienia + '">' + (typeMap[order.typ_zamowienia] || order.typ_zamowienia) + '</div>' +
+          '<div class="order-details">' +
+            addressHtml +
+            '<div class="pizza-list">' + pizzaHtml + '</div>' +
+            '<div class="detail-row"><span class="detail-label">Cena:</span> ' + order.cena_calkowita + ' PLN</div>' +
+            '<div class="detail-row"><span class="detail-label">Płatność:</span> ' + order.platnosc + '</div>' +
+          '</div>' +
+          '<div class="restore-actions">' +
+            '<button class="restore-btn to-prep" onclick="restoreOrder(' + order.id + ', \\'do_przygotowania\\')">⬅️ Do Przygotowania</button>' +
+            '<button class="restore-btn to-progress" onclick="restoreOrder(' + order.id + ', \\'w_trakcie\\')">⬅️ W Trakcie</button>' +
+          '</div>' +
+        '</div>';
+      } catch (error) {
+        console.error('Błąd renderowania karty zamówienia ID ' + order.id + ':', error);
+        return '<div class="order-card"><div class="order-content">Błąd: ' + error.message + '</div></div>';
+      }
+    }
+    
+    async function restoreOrder(orderId, newStatus) {
+      if (!confirm('Czy na pewno chcesz przywrócić to zamówienie?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/kuchnia/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, status: newStatus })
+        });
+        
+        if (response.ok) {
+          showToast('Zamówienie przywrócone do panelu kuchni!', 'success');
+          loadHistory();
+        } else {
+          showToast('Błąd przywracania zamówienia', 'error');
+        }
+      } catch (error) {
+        console.error('Błąd:', error);
+        showToast('Błąd połączenia', 'error');
+      }
+    }
+    
+    // Initial load
+    loadHistory();
+  </script>
+</body>
+</html>
+    `;
+    res.end(historiaHtml);
     return;
   }
   
@@ -1260,7 +1880,7 @@ const server = http.createServer(async (req, res) => {
             
             // Komendy ESC/POS
             const ESC = 0x1B;
-            const GS = 0x1D;
+            const GS = 0x1D;////////////////////////////////////////////////////////
             const LF = 0x0A;
             const CENTER = [ESC, 0x61, 0x01]; // Wyśrodkowanie
             const LEFT = [ESC, 0x61, 0x00];   // Do lewej
@@ -1292,14 +1912,12 @@ const server = http.createServer(async (req, res) => {
             receipt.push(...Buffer.from(`Typ: ${typMap[order.typ_zamowienia] || order.typ_zamowienia}\n`, 'utf-8'));
             
             // Telefon i adres (tylko dla dowozu)
-            if (order.typ_zamowienia === 'dowoz') {
               receipt.push(...LEFT, ...SIZE_DOUBLE, ...BOLD_ON);
               receipt.push(...Buffer.from(toAscii(`Tel: ${order.telefon || '-'}\n`), 'utf-8'));
               receipt.push(LF);
               receipt.push(...BOLD_OFF, ...SIZE_NORMAL);
               receipt.push(...Buffer.from(toAscii(`Adres: ${order.adres || '-'}\n`), 'utf-8'));
-            }
-            receipt.push(...Buffer.from('================================\n', 'utf-8'));
+              receipt.push(...Buffer.from('================================\n', 'utf-8'));
             
             // Pizze
             if (order.pizze) {
@@ -1398,7 +2016,7 @@ const server = http.createServer(async (req, res) => {
             // Stopka
             receipt.push(...CENTER);
             receipt.push(...Buffer.from('Smacznego!\n', 'utf-8'));
-            receipt.push(LF, LF); // Kilka linii pustych (brak automatycznego cięcia)
+            receipt.push(LF, LF, LF, LF); // Kilka linii pustych (brak automatycznego cięcia)
             
             // Wyślij do drukarki USB
             try {
@@ -1497,6 +2115,7 @@ const server = http.createServer(async (req, res) => {
     // Pobierz również dane pizz i napojów do wyświetlania nazw
     const [pizzas] = await connection.execute('SELECT * FROM menu_pizza');
     const [napoje] = await connection.execute('SELECT * FROM napoje');
+    const [pozycjeExtra] = await connection.execute('SELECT * FROM pozycje_extra');
     
     // Helper function do formatowania informacji o pizzach
     const formatPizzaInfo = (pizzeJson) => {
@@ -1540,6 +2159,24 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         // Jeśli nie jest JSON, zwróć jako tekst
         return napojJson;
+      }
+    };
+    
+    // Helper function do formatowania dodatków
+    const formatDodatkiInfo = (dodatkiJson) => {
+      if (!dodatkiJson) return '-';
+      try {
+        const dodatkiIds = JSON.parse(dodatkiJson);
+        if (Array.isArray(dodatkiIds)) {
+          if (dodatkiIds.length === 0) return '-';
+          return dodatkiIds.map(id => {
+            const extraData = pozycjeExtra.find(e => e.id == id);
+            return extraData ? extraData.nazwa : `ID:${id}`;
+          }).join('<br>');
+        }
+        return '-';
+      } catch (e) {
+        return dodatkiJson;
       }
     };
     
@@ -1607,7 +2244,7 @@ const server = http.createServer(async (req, res) => {
       border-collapse: collapse; 
       width: 100%; 
       background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
+      
       box-shadow: 0 20px 40px rgba(0,0,0,0.15);
       border-radius: 20px;
       overflow: hidden;
@@ -1616,20 +2253,29 @@ const server = http.createServer(async (req, res) => {
     }
     th, td { 
       border: 1px solid #e5e7eb; 
-      padding: 12px 14px; 
+      padding: 16px 18px; 
       text-align: left; 
-      font-size: 13px;
-      line-height: 1.5;
+      font-size: 15px;
+      line-height: 1.6;
       word-wrap: break-word;
       overflow-wrap: break-word;
     }
     th { 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: hsl(25 95% 53%);
       color: white;
       font-weight: 700;
-      font-size: 12px;
+      font-size: 14px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.8px;
+      border-left: 2px solid white;
+      border-right: 2px solid white;
+      white-space: nowrap;
+    }
+    th:first-child {
+      border-left: none;
+    }
+    th:last-child {
+      border-right: none;
     }
     td {
       color: #1f2937;
@@ -1639,26 +2285,26 @@ const server = http.createServer(async (req, res) => {
       transition: background-color 0.2s ease;
     }
     .refresh-btn { 
-      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%);
       color: white; 
-      padding: 10px 18px; 
+      padding: 14px 24px; 
       border: none; 
       border-radius: 12px; 
       cursor: pointer;
-      font-size: 12px;
+      font-size: 15px;
       font-weight: 700;
-      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+      box-shadow: 0 6px 20px rgba(255, 123, 0, 0.4);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.8px;
     }
     .refresh-btn:hover {
       transform: translateY(-3px) scale(1.02);
-      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.5);
+      box-shadow: 0 10px 30px rgba(255, 123, 0, 0.5);
     }
     .filters-container {
       background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
+      
       padding: 16px;
       border-radius: 16px;
       margin-bottom: 16px;
@@ -1672,7 +2318,7 @@ const server = http.createServer(async (req, res) => {
     .filter-group {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }
     .filter-group label {
       font-weight: 600;
@@ -1686,18 +2332,19 @@ const server = http.createServer(async (req, res) => {
       padding: 8px 12px;
       border: 2px solid #e5e7eb;
       border-radius: 8px;
-      font-size: 13px;
+      font-size: 14px;
       transition: all 0.3s ease;
       background: white;
+      font-weight: 500;
     }
     .filter-group select:focus,
     .filter-group input:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: hsl(25 95% 53%);
+      box-shadow: 0 0 0 3px rgba(255, 123, 0, 0.1);
     }
     .search-input {
-      width: 280px;
+      width: 220px;
     }
     .apply-btn {
       padding: 10px 18px;
@@ -1708,6 +2355,7 @@ const server = http.createServer(async (req, res) => {
       margin-top: 14px;
       font-size: 12px;
       color: white;
+      background: #404040;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1715,36 +2363,37 @@ const server = http.createServer(async (req, res) => {
       overflow: hidden;
     }
     .apply-btn:hover {
+      background: #505050;
       transform: translateY(-3px) scale(1.02);
     }
     .apply-btn:active {
       transform: translateY(-1px) scale(0.98);
     }
     .edit-btn {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%);
       color: white;
-      padding: 6px 12px;
+      padding: 10px 18px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      font-size: 12px;
+      font-size: 14px;
       margin-bottom: 3px;
       font-weight: 600;
       transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+      box-shadow: 0 2px 8px rgba(255, 123, 0, 0.3);
     }
     .edit-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+      box-shadow: 0 4px 12px rgba(255, 123, 0, 0.4);
     }
     .delete-btn {
       background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
       color: white;
-      padding: 6px 12px;
+      padding: 10px 18px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 600;
       transition: all 0.3s ease;
       box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
@@ -1754,31 +2403,31 @@ const server = http.createServer(async (req, res) => {
       box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
     }
     .save-btn {
-      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%);
       color: white;
-      padding: 8px 16px;
+      padding: 12px 24px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      font-size: 12px;
+      font-size: 15px;
       margin-right: 4px;
-      font-weight: 600;
+      font-weight: 700;
       transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 2px 8px rgba(255, 123, 0, 0.3);
     }
     .save-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+      box-shadow: 0 4px 12px rgba(255, 123, 0, 0.4);
     }
     .cancel-btn {
       background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
       color: white;
-      padding: 8px 16px;
+      padding: 12px 24px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 15px;
+      font-weight: 700;
       transition: all 0.3s ease;
       box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
     }
@@ -1790,39 +2439,51 @@ const server = http.createServer(async (req, res) => {
       position: relative;
     }
     select.payment-select {
-      padding: 8px;
+      padding: 12px;
       font-size: 15px;
-      border: 2px solid #e0e0e0;
-      border-radius: 5px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
       width: 100%;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    select.payment-select:focus {
+      outline: none;
+      border-color: hsl(25 95% 53%);
+      box-shadow: 0 0 0 3px rgba(255, 123, 0, 0.1);
     }
     input.edit-input {
-      padding: 8px;
+      padding: 12px;
       font-size: 15px;
-      border: 2px solid #e0e0e0;
-      border-radius: 5px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
       width: 100%;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    input.edit-input:focus {
+      outline: none;
+      border-color: hsl(25 95% 53%);
+      box-shadow: 0 0 0 3px rgba(255, 123, 0, 0.1);
     }
     .print-btn {
-      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%);
       color: white;
-      padding: 12px 24px;
+      padding: 16px 32px;
       border: none;
       border-radius: 12px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 700;
-      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+      box-shadow: 0 6px 20px rgba(255, 123, 0, 0.4);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 16px;
+      letter-spacing: 0.8px;
+      margin-bottom: 20px;
     }
     .print-btn:hover {
       transform: translateY(-3px) scale(1.02);
-      box-shadow: 0 10px 30px rgba(139, 92, 246, 0.5);
+      box-shadow: 0 10px 30px rgba(255, 123, 0, 0.5);
     }
     .print-btn:disabled {
       opacity: 0.5;
@@ -1830,16 +2491,16 @@ const server = http.createServer(async (req, res) => {
       transform: none;
     }
     .order-checkbox {
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       cursor: pointer;
-      accent-color: #8b5cf6;
+      accent-color: hsl(25 95% 53%);
     }
     #select-all-checkbox {
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       cursor: pointer;
-      accent-color: #8b5cf6;
+      accent-color: hsl(25 95% 53%);
     }
   </style>
   <script>
@@ -2030,7 +2691,7 @@ const server = http.createServer(async (req, res) => {
       const orderIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
       
       if (orderIds.length === 0) {
-        alert('Nie zaznaczono żadnych zamówień do wydruku');
+        showToast('Nie zaznaczono żadnych zamówień do wydruku', 'warning');
         return;
       }
       
@@ -2050,41 +2711,81 @@ const server = http.createServer(async (req, res) => {
         const result = await response.json();
         
         if (response.ok) {
-          alert('Pomyslnie wydrukowano ' + result.printed + ' paragonow');
+          showToast('Pomyslnie wydrukowano ' + result.printed + ' paragonow', 'success');
           // Odznacz wszystkie checkboxy
           checkboxes.forEach(cb => cb.checked = false);
           document.getElementById('select-all-checkbox').checked = false;
           updatePrintButton();
         } else {
-          alert('Blad drukowania: ' + result.error);
+          showToast('Blad drukowania: ' + result.error, 'error');
         }
       } catch (error) {
-        alert('Blad polaczenia: ' + error.message);
+        showToast('Blad polaczenia: ' + error.message, 'error');
       } finally {
         printBtn.disabled = false;
         updatePrintButton();
       }
     }
+
+    // Toast notification function
+    function showToast(message, type) {
+      const toast = document.createElement('div');
+      let bgColor = 'hsl(25 95% 53%)';
+      if (type === 'error') bgColor = '#ef4444';
+      if (type === 'warning') bgColor = '#404040';
+      
+      toast.style.position = 'fixed';
+      toast.style.top = '50%';
+      toast.style.left = '50%';
+      toast.style.transform = 'translate(-50%, -50%)';
+      toast.style.background = bgColor;
+      toast.style.color = 'white';
+      toast.style.padding = '24px 32px';
+      toast.style.borderRadius = '12px';
+      toast.style.fontSize = '16px';
+      toast.style.fontWeight = '500';
+      toast.style.boxShadow = '0 10px 40px rgba(0, 0, 0, 0.3)';
+      toast.style.zIndex = '10000';
+      toast.style.maxWidth = '90%';
+      toast.style.textAlign = 'center';
+      toast.style.animation = 'slideIn 0.3s ease-out';
+      
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Add animation styles if not already present
+    if (!document.getElementById('toast-animations')) {
+      const style = document.createElement('style');
+      style.id = 'toast-animations';
+      style.textContent = '@keyframes slideIn { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } } @keyframes slideOut { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } }';
+      document.head.appendChild(style);
+    }
   </script>
 </head>
 <body>
   <div style="max-width: 1600px; margin: 0 auto;">
-    <h1 style="color: #1f2937; font-size: 2.2em; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 20px;">Zamówienia Pizza App</h1>
+    <h1 style="color: #1f2937; font-size: 2.2em; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 20px;">Panel obsługi zamówień</h1>
     
     <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: nowrap;">
-      <button class="apply-btn" onclick="window.location.href='http://localhost:3000'" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4);">
+      <button class="apply-btn" onclick="window.location.href='http://localhost:3000'" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4); padding: 16px 28px; font-size: 15px;">
         Formularz zamówienia
       </button>
-      <button class="apply-btn" onclick="window.location.href='/kuchnia'" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);">
+      <button class="apply-btn" onclick="window.location.href='/kuchnia'" style="background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4); padding: 16px 28px; font-size: 15px;">
         Panel Kuchni
       </button>
-      <button class="apply-btn" onclick="window.location.href='/customer-dashboard'" style="background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);">
+      <button class="apply-btn" onclick="window.location.href='/customer-dashboard'" style="background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4); padding: 16px 28px; font-size: 15px;">
         Statystyki Klientów
       </button>
-      <button class="apply-btn" onclick="window.location.href='/sesja'" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);">
+      <button class="apply-btn" onclick="window.location.href='/sesja'" style="background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4); padding: 16px 28px; font-size: 15px;">
         Sesja
       </button>
-      <button class="apply-btn" onclick="window.location.href='/zakupy-lista'" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);">
+      <button class="apply-btn" onclick="window.location.href='/zakupy-lista'" style="background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4); padding: 16px 28px; font-size: 15px;">
         Lista zakupów
       </button>
     </div>
@@ -2114,14 +2815,12 @@ const server = http.createServer(async (req, res) => {
       <input type="text" id="searchInput" class="search-input" placeholder="Szukaj w całej historii..." value="${search}">
     </div>
     
-    <div class="filter-group">
+    <div class="filter-group" style="grid-column: span 2;">
       <label>&nbsp;</label>
-      <button class="apply-btn" onclick="applyFilters()">Zastosuj filtry</button>
-    </div>
-    
-    <div class="filter-group">
-      <label>&nbsp;</label>
-      <button class="refresh-btn" onclick="resetFilters()">Resetuj</button>
+      <div style="display: flex; gap: 10px;">
+        <button class="apply-btn" onclick="applyFilters()">Zastosuj filtry</button>
+        <button class="apply-btn" onclick="resetFilters()" style="background: #404040; min-width: 120px;">Resetuj</button>
+      </div>
     </div>
   </div>
   
@@ -2136,19 +2835,19 @@ const server = http.createServer(async (req, res) => {
       <th style="width: 50px;">
         <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll()" title="Zaznacz wszystkie">
       </th>
-      <th style="width: 80px;">Typ</th>
-      <th style="width: 100px;">Telefon</th>
-      <th style="width: 150px;">Adres</th>
-      <th style="width: 180px;">Pizze</th>
-      <th style="width: 140px;">Modyfikacje</th>
-      <th style="width: 80px;">Sosy</th>
-      <th style="width: 80px;">Napój</th>
-      <th style="width: 90px;">Dodatki</th>
+      <th style="width: 100px;">Typ</th>
+      <th style="width: 110px;">Telefon</th>
+      <th style="width: 180px;">Adres</th>
+      <th style="width: 220px;">Pizze</th>
+      <th style="width: 160px;">Modyfikacje</th>
+      <th style="width: 90px;">Sosy</th>
+      <th style="width: 90px;">Napój</th>
+      <th style="width: 110px;">Dodatki</th>
       <th style="width: 100px;">Cena</th>
       <th style="width: 90px;">Kupony</th>
-      <th style="width: 100px;">Płatność</th>
-      <th style="width: 100px;">Kierowca</th>
-      <th style="width: 130px;">Data</th>
+      <th style="width: 120px;">Płatność</th>
+      <th style="width: 110px;">Kierowca</th>
+      <th style="width: 150px;">Data</th>
       <th style="width: 180px;">Akcje</th>
     </tr>
     ${orders.map((order, i) => `
@@ -2159,11 +2858,11 @@ const server = http.createServer(async (req, res) => {
       <td>${formatTypZamowienia(order.typ_zamowienia)}</td>
       <td id="telefon-${order.id}" class="editable-cell">${order.telefon || '-'}</td>
       <td id="adres-${order.id}" class="editable-cell">${order.adres || '-'}</td>
-      <td style="max-width: 160px; word-wrap: break-word; font-size: 11px;">${formatPizzaInfo(order.pizze || order.pizza)}</td>
-      <td style="max-width: 120px; word-wrap: break-word; font-size: 10px;">${order.skladniki || '-'}</td>
-      <td style="font-size: 10px; line-height: 1.3;">${formatSosyInfo(order.sosy)}</td>
+      <td style="max-width: 220px; word-wrap: break-word; font-size: 11px;">${formatPizzaInfo(order.pizze || order.pizza)}</td>
+      <td style="max-width: 160px; word-wrap: break-word; font-size: 10px;">${order.skladniki || '-'}</td>
+      <td style="font-size: 11px; line-height: 1.3;">${formatSosyInfo(order.sosy)}</td>
       <td style="font-size: 11px;">${formatNapojInfo(order.napoj)}</td>
-      <td style="font-size: 11px;">${order.pozycje_extra || order.dodatki || '-'}</td>
+      <td style="font-size: 11px;">${formatDodatkiInfo(order.pozycje_extra || order.dodatki)}</td>
       <td id="price-${order.id}" class="editable-cell">${order.cena_calkowita || order.cena || '-'} PLN</td>
       <td>${(typeof order.is_kupony !== 'undefined' && order.is_kupony === 1) ? 'KUPONY' : '-'}</td>
       <td id="payment-${order.id}" class="editable-cell">
