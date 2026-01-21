@@ -100,7 +100,13 @@ export default function Home() {
 
   const searchStreets = api.pizza.searchUlice.useQuery(
     { query: ulica },
-    { enabled: ulica.length > 2 && ulica !== previousUlica }
+    { 
+      enabled: ulica.length > 2,
+      refetchOnMount: true,
+      staleTime: 0, // Wyłącz cache całkowicie
+      cacheTime: 0, // Wyłącz cache całkowicie
+      keepPreviousData: true,
+    }
   );
 
   const dzielnicaInfo = api.pizza.getDzielnicaForUlica.useQuery(
@@ -122,7 +128,22 @@ export default function Home() {
     console.log("Pozycje extra data:", pozycjeExtra);
     console.log("Pozycje extra loading:", extraLoading);
     console.log("Aktywne sesje:", aktywneSesje);
-  }, [pizzas, pizzasLoading, pizzasError, pozycjeExtra, extraLoading, skladniki, skladnikiError, aktywneSesje]);
+    console.log("🔍 searchStreets status:", {
+      enabled: ulica.length > 2,
+      ulica,
+      isLoading: searchStreets.isLoading,
+      isFetching: searchStreets.isFetching,
+      data: searchStreets.data,
+      error: searchStreets.error,
+      status: searchStreets.status,
+      fetchStatus: searchStreets.fetchStatus,
+    });
+    
+    // Dodatkowe debugowanie - czy tRPC w ogóle działa?
+    if (pizzasLoading && !pizzas && !pizzasError) {
+      console.error("⚠️ tRPC nie wykonuje zapytań! Sprawdź Network tab w DevTools");
+    }
+  }, [pizzas, pizzasLoading, pizzasError, pozycjeExtra, extraLoading, skladniki, skladnikiError, aktywneSesje, searchStreets, ulica]);
 
   const calculatePriceMutation = api.pizza.calculatePrice.useMutation();
   const placeOrderMutation = api.pizza.placeOrder.useMutation();
@@ -158,7 +179,14 @@ export default function Home() {
     }
 
     try {
+      console.log("=== SKŁADANIE ZAMÓWIENIA Z DRUKOWANIEM ===");
       console.log("Składanie zamówienia z drukowaniem:", orderData);
+      console.log("placeOrderMutation status:", {
+        isLoading: placeOrderMutation.isLoading,
+        isError: placeOrderMutation.isError,
+        isSuccess: placeOrderMutation.isSuccess,
+        error: placeOrderMutation.error,
+      });
       
       // Przygotuj obiekt modyfikacjeSkladnikow
       const modyfikacjeSkladnikow: Record<string, Record<string, number>> = {};
@@ -190,7 +218,8 @@ export default function Home() {
       // Sprawdź czy którakolwiek pizza ma isKupony = true
       const hasKupony = orderData.pizze.some(p => p.isKupony === true);
       
-      const result = await placeOrderMutation.mutateAsync({
+      console.log("=== WYWOŁANIE MUTACJI ===");
+      const mutationInput = {
         telefon: orderData.telefon,
         adres: orderData.adres,
         pizze: orderData.pizze.map(p => ({ 
@@ -209,9 +238,11 @@ export default function Home() {
         customDeliveryPrice: customDeliveryPrice ?? undefined,
         sesjaId: (typZamowienia === "dowoz" && wybranaSesjaId) ? wybranaSesjaId : undefined,
         modyfikacjeSkladnikow: Object.keys(modyfikacjeSkladnikow).length > 0 ? modyfikacjeSkladnikow : undefined,
-      });
-
-      console.log("Wynik zamówienia:", result);
+      };
+      console.log("Mutation input:", mutationInput);
+      
+      const result = await placeOrderMutation.mutateAsync(mutationInput);
+      console.log("=== WYNIK MUTACJI ===", result);
       
       if (result && result.success) {
         // Wywołaj endpoint drukowania
@@ -236,8 +267,14 @@ export default function Home() {
       }
       
     } catch (error) {
+      console.error("=== BŁĄD PODCZAS SKŁADANIA ZAMÓWIENIA ===");
       console.error("Szczegółowy błąd zamówienia:", error);
+      console.error("Error type:", typeof error);
+      console.error("Error constructor:", error?.constructor?.name);
+      console.error("Error JSON:", JSON.stringify(error, null, 2));
       if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
         toast.error(`Błąd: ${error.message}`);
       } else {
         toast.error("Błąd podczas składania zamówienia. Spróbuj ponownie.");
@@ -832,8 +869,15 @@ export default function Home() {
     }
 
     try {
+      console.log("=== SKŁADANIE ZAMÓWIENIA (bez drukowania) ===");
       console.log("Składanie zamówienia:", orderData);
       console.log("Sosy przed wysłaniem:", orderData.sosy);
+      console.log("placeOrderMutation status:", {
+        isLoading: placeOrderMutation.isLoading,
+        isError: placeOrderMutation.isError,
+        isSuccess: placeOrderMutation.isSuccess,
+        error: placeOrderMutation.error,
+      });
       
       // Przygotuj obiekt modyfikacjeSkladnikow
       const modyfikacjeSkladnikow: Record<string, Record<string, number>> = {};
@@ -865,7 +909,8 @@ export default function Home() {
       // Sprawdź czy którakolwiek pizza ma isKupony = true
       const hasKupony = orderData.pizze.some(p => p.isKupony === true);
       
-      const result = await placeOrderMutation.mutateAsync({
+      console.log("=== WYWOŁANIE MUTACJI (bez drukowania) ===");
+      const mutationInput = {
         telefon: orderData.telefon,
         adres: orderData.adres,
         pizze: orderData.pizze.map(p => ({ 
@@ -884,9 +929,11 @@ export default function Home() {
         customDeliveryPrice: customDeliveryPrice ?? undefined,
         sesjaId: (typZamowienia === "dowoz" && wybranaSesjaId) ? wybranaSesjaId : undefined,
         modyfikacjeSkladnikow: Object.keys(modyfikacjeSkladnikow).length > 0 ? modyfikacjeSkladnikow : undefined,
-      });
-
-      console.log("Wynik zamówienia:", result);
+      };
+      console.log("Mutation input:", mutationInput);
+      
+      const result = await placeOrderMutation.mutateAsync(mutationInput);
+      console.log("=== WYNIK MUTACJI ===", result);
       
       if (result && result.success) {
         toast.success(` Zamówienie złożone pomyślnie! Cena: ${result.cenaCalkwita} PLN`);
@@ -896,8 +943,14 @@ export default function Home() {
       }
       
     } catch (error) {
+      console.error("=== BŁĄD PODCZAS SKŁADANIA ZAMÓWIENIA (bez drukowania) ===");
       console.error("Szczegółowy błąd zamówienia:", error);
+      console.error("Error type:", typeof error);
+      console.error("Error constructor:", error?.constructor?.name);
+      console.error("Error JSON:", JSON.stringify(error, null, 2));
       if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
         toast.error(` Błąd: ${error.message}`);
       } else {
         toast.error(" Błąd podczas składania zamówienia. Spróbuj ponownie.");

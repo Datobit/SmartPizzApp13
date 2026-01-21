@@ -13,16 +13,16 @@ import { type AppRouter } from "~/server/api/root";
 
 const getBaseUrl = () => {
   if (typeof window !== "undefined") {
-    // W przeglądarce używaj względnego URL (localhost)
+    // W przeglądarce używaj pustego stringa (względny URL działa lepiej z Next.js)
     return "";
   }
-  // Na serwerze używaj localhost bez sprawdzania zewnętrznych URL
+  // Na serwerze używaj localhost
   return `http://localhost:${process.env.PORT ?? 3000}`;
 };
 
 /** A set of type-safe react-query hooks for your tRPC API. */
 export const api = createTRPCNext<AppRouter>({
-  config() {
+  config({ ctx }) {
     return {
       /**
        * Transformer used for data de-serialization from the server.
@@ -50,14 +50,6 @@ export const api = createTRPCNext<AppRouter>({
               'x-trpc-source': 'nextjs-react',
             };
           },
-          // Wydłuż timeout dla wolniejszych połączeń lokalnych
-          fetch(url, options) {
-            return fetch(url, {
-              ...options,
-              // Krótszy timeout dla lokalnych połączeń
-              signal: AbortSignal.timeout(10000),
-            });
-          },
         }),
       ],
       
@@ -65,19 +57,23 @@ export const api = createTRPCNext<AppRouter>({
       queryClientConfig: {
         defaultOptions: {
           queries: {
-            // Krótszy czas retry dla lokalnych połączeń
-            retry: 2,
-            retryDelay: 1000,
-            // Cache na dłużej
-            staleTime: 30 * 1000, // 30 sekund
-            cacheTime: 60 * 60 * 1000, // 1 godzina
-            // Nie refetch automatycznie
+            // Wyłącz wszystkie cache i retry dla pewności
+            retry: false,
+            retryDelay: 0,
+            staleTime: 0,
+            cacheTime: 0,
+            // Wymuś fetch
             refetchOnWindowFocus: false,
             refetchOnReconnect: false,
-            refetchOnMount: false,
+            refetchOnMount: true,
+            // Nie używaj suspense
+            suspense: false,
+            // Wyłącz network mode
+            networkMode: 'always',
           },
           mutations: {
-            retry: 1,
+            retry: false,
+            networkMode: 'always',
           },
         },
       },
