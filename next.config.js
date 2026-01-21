@@ -16,9 +16,25 @@ const config = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Wyłącz preconnect do zewnętrznych domen
-  experimental: {
-    optimizeFonts: false,
+  
+  // Wyłącz wszystkie zewnętrzne połączenia
+  webpack: (config, { isServer }) => {
+    // Wyłącz próby połączeń sieciowych podczas budowania
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        dns: false,
+      };
+    }
+    return config;
+  },
+  
+  // Wyłącz sprawdzanie aktualizacji
+  onDemandEntries: {
+    maxInactiveAge: 60 * 60 * 1000,
   },
 };
 

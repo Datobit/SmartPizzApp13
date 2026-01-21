@@ -30,15 +30,19 @@ const server = http.createServer(async (req, res) => {
         database: 'SmartPizzApp13'
       });
       
-      // Wyszukaj zamówienia pasujące do telefonu lub adresu
+      // Normalizuj zapytanie - usuń przecinki i nadmiarowe spacje
+      const normalizedQuery = searchQuery.replace(/[,]/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // Wyszukaj zamówienia pasujące do telefonu lub adresu (elastyczne wyszukiwanie)
       const [orders] = await connection.execute(
         `SELECT z.*, k.nazwa as kierowca_nazwa 
          FROM zamowienia z
          LEFT JOIN sesje s ON z.sesja_id = s.id
          LEFT JOIN kierowcy k ON s.kierowca_id = k.id
-         WHERE z.telefon LIKE ? OR z.adres LIKE ?
+         WHERE z.telefon LIKE ? 
+            OR REPLACE(REPLACE(LOWER(z.adres), ',', ' '), '  ', ' ') LIKE ?
          ORDER BY z.created_at DESC`,
-        [`%${searchQuery}%`, `%${searchQuery}%`]
+        [`%${searchQuery}%`, `%${normalizedQuery.toLowerCase()}%`]
       );
       
       // Pobierz nazwy pizz
@@ -379,8 +383,8 @@ const server = http.createServer(async (req, res) => {
         
         let saldo = 0;
         for (let t of transakcje) {
-          // Transakcje kartą nie wliczają się do salda
-          if (t.forma_platnosci === 'karta') {
+          // Transakcje kartą i online nie wliczają się do salda
+          if (t.forma_platnosci === 'karta' || t.forma_platnosci === 'online') {
             continue;
           }
           
@@ -490,8 +494,8 @@ const server = http.createServer(async (req, res) => {
         
         let saldo = 0;
         for (let t of transakcje) {
-          // Transakcje kartą nie wliczają się do salda
-          if (t.forma_platnosci === 'karta') {
+          // Transakcje kartą i online nie wliczają się do salda
+          if (t.forma_platnosci === 'karta' || t.forma_platnosci === 'online') {
             continue;
           }
           
@@ -2056,6 +2060,233 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   
+  // Endpoint drukowania ostatniego zamówienia
+  if (pathname === '/api/print-latest') {
+    // Obsługa CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    
+    if (req.method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Method not allowed' }));
+      return;
+    }
+    
+    let connection;
+    try {
+      connection = await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'Pepperoni13',
+        database: 'SmartPizzApp13'
+      });
+      
+      // Pobierz ostatnie zamówienie
+      const [orders] = await connection.execute(
+        `SELECT z.*, k.nazwa as kierowca_nazwa 
+         FROM zamowienia z
+         LEFT JOIN sesje s ON z.sesja_id = s.id
+         LEFT JOIN kierowcy k ON s.kierowca_id = k.id
+         ORDER BY z.created_at DESC
+         LIMIT 1`
+      );
+      
+      if (!orders || orders.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Brak zamówień' }));
+        if (connection) await connection.end();
+        return;
+      }
+      
+      // Pobierz dane pizz i napojów
+      const [pizzas] = await connection.execute('SELECT * FROM menu_pizza');
+      const [napoje] = await connection.execute('SELECT * FROM napoje');
+      const [pozycjeExtra] = await connection.execute('SELECT * FROM pozycje_extra');
+      
+      // Funkcja drukowania (ta sama co w /print-receipt)
+      const printReceipt = (order) => {
+        return new Promise((resolve, reject) => {
+          const toAscii = (text) => {
+            if (!text) return text;
+            return text
+              .replace(/ą/g, 'a').replace(/Ą/g, 'A')
+              .replace(/ć/g, 'c').replace(/Ć/g, 'C')
+              .replace(/ę/g, 'e').replace(/Ę/g, 'E')
+              .replace(/ł/g, 'l').replace(/Ł/g, 'L')
+              .replace(/ń/g, 'n').replace(/Ń/g, 'N')
+              .replace(/ó/g, 'o').replace(/Ó/g, 'O')
+              .replace(/ś/g, 's').replace(/Ś/g, 'S')
+              .replace(/ź/g, 'z').replace(/Ź/g, 'Z')
+              .replace(/ż/g, 'z').replace(/Ż/g, 'Z');
+          };
+          
+          const printerPath = process.env.PRINTER_PORT || '/dev/usb/lp0';
+          console.log(`Drukowanie ostatniego zamówienia na: ${printerPath}`);
+          
+          if (!fs.existsSync(printerPath)) {
+            const error = new Error(`Drukarka nie znaleziona: ${printerPath}`);
+            console.error(error.message);
+            reject(error);
+            return;
+          }
+          
+          const ESC = 0x1B;
+          const GS = 0x1D;
+          const LF = 0x0A;
+          const CENTER = [ESC, 0x61, 0x01];
+          const LEFT = [ESC, 0x61, 0x00];
+          const BOLD_ON = [ESC, 0x45, 0x01];
+          const BOLD_OFF = [ESC, 0x45, 0x00];
+          const SIZE_NORMAL = [GS, 0x21, 0x00];
+          const SIZE_DOUBLE = [GS, 0x21, 0x11];
+          
+          let receipt = [];
+          receipt.push(ESC, 0x40);
+          receipt.push(...CENTER, ...SIZE_DOUBLE, ...BOLD_ON);
+          receipt.push(...Buffer.from('PizzApp13\n', 'utf-8'));
+          receipt.push(...BOLD_OFF, ...SIZE_NORMAL);
+          receipt.push(...Buffer.from('================================\n', 'utf-8'));
+          
+          const orderDate = new Date(order.created_at).toLocaleString('pl-PL');
+          receipt.push(...Buffer.from(`Data: ${orderDate}\n`, 'utf-8'));
+          receipt.push(...Buffer.from('================================\n', 'utf-8'));
+          
+          const typMap = { 'na_miejscu': 'Na miejscu', 'na_wynos': 'Na wynos', 'dowoz': 'Dowoz' };
+          receipt.push(...Buffer.from(`Typ: ${typMap[order.typ_zamowienia] || order.typ_zamowienia}\n`, 'utf-8'));
+          
+          receipt.push(...LEFT, ...SIZE_DOUBLE, ...BOLD_ON);
+          receipt.push(...Buffer.from(toAscii(`Tel: ${order.telefon || '-'}\n`), 'utf-8'));
+          receipt.push(LF);
+          receipt.push(...BOLD_OFF, ...SIZE_NORMAL);
+          receipt.push(...Buffer.from(toAscii(`Adres: ${order.adres || '-'}\n`), 'utf-8'));
+          receipt.push(...Buffer.from('================================\n', 'utf-8'));
+          
+          if (order.pizze) {
+            try {
+              const pizzeArray = JSON.parse(order.pizze);
+              receipt.push(...BOLD_ON);
+              receipt.push(...Buffer.from('PIZZE:\n', 'utf-8'));
+              receipt.push(...BOLD_OFF);
+              pizzeArray.forEach((pizza) => {
+                const pizzaData = pizzas.find(p => p.id === pizza.id);
+                let pizzaName = pizzaData ? pizzaData.nazwa : `Pizza ID:${pizza.id}`;
+                if (pizza.polNaPol) {
+                  const drugaPizza = pizzas.find(p => p.id === pizza.polNaPol.id);
+                  if (drugaPizza) {
+                    pizzaName = `${pizzaData.nazwa}/${drugaPizza.nazwa} (pol na pol)`;
+                  }
+                }
+                receipt.push(...Buffer.from(toAscii(`  ${pizzaName}\n`), 'utf-8'));
+                receipt.push(...Buffer.from(toAscii(`    Rozmiar: ${pizza.rozmiar}\n`), 'utf-8'));
+              });
+            } catch (e) {}
+          }
+          
+          if (order.skladniki) {
+            receipt.push(...BOLD_ON);
+            receipt.push(...Buffer.from('Modyfikacje:\n', 'utf-8'));
+            receipt.push(...BOLD_OFF);
+            receipt.push(...Buffer.from(toAscii(`  ${order.skladniki.replace(/<br>/g, '\n  ')}\n`), 'utf-8'));
+          }
+          
+          if (order.sosy) {
+            try {
+              const sosy = JSON.parse(order.sosy);
+              if (sosy.pom > 0 || sosy.czos > 0) {
+                receipt.push(...BOLD_ON);
+                receipt.push(...Buffer.from('Sosy:\n', 'utf-8'));
+                receipt.push(...BOLD_OFF);
+                if (sosy.pom > 0) receipt.push(...Buffer.from(toAscii(`  Pomidorowy: ${sosy.pom}\n`), 'utf-8'));
+                if (sosy.czos > 0) receipt.push(...Buffer.from(toAscii(`  Czosnkowy: ${sosy.czos}\n`), 'utf-8'));
+              }
+            } catch (e) {}
+          }
+          
+          if (order.napoj) {
+            try {
+              const napojIds = JSON.parse(order.napoj);
+              if (Array.isArray(napojIds) && napojIds.length > 0) {
+                receipt.push(...BOLD_ON);
+                receipt.push(...Buffer.from('Napoje:\n', 'utf-8'));
+                receipt.push(...BOLD_OFF);
+                napojIds.forEach(id => {
+                  const napojData = napoje.find(n => n.id == id);
+                  const napojName = napojData ? napojData.nazwa : `ID:${id}`;
+                  receipt.push(...Buffer.from(toAscii(`  ${napojName}\n`), 'utf-8'));
+                });
+                receipt.push(LF);
+              }
+            } catch (e) {}
+          }
+          
+          if (order.pozycje_extra) {
+            try {
+              const extraIds = JSON.parse(order.pozycje_extra);
+              if (Array.isArray(extraIds) && extraIds.length > 0) {
+                receipt.push(...BOLD_ON);
+                receipt.push(...Buffer.from('Dodatki:\n', 'utf-8'));
+                receipt.push(...BOLD_OFF);
+                extraIds.forEach(id => {
+                  const extraData = pozycjeExtra.find(e => e.id == id);
+                  const extraName = extraData ? extraData.nazwa : `ID:${id}`;
+                  receipt.push(...Buffer.from(toAscii(`  ${extraName}\n`), 'utf-8'));
+                });
+              }
+            } catch (e) {}
+          }
+          
+          receipt.push(...Buffer.from('================================\n', 'utf-8'));
+          receipt.push(...SIZE_DOUBLE, ...BOLD_ON);
+          receipt.push(...Buffer.from(`SUMA: ${order.cena_calkowita} PLN\n`, 'utf-8'));
+          receipt.push(...SIZE_NORMAL, ...BOLD_OFF);
+          receipt.push(...Buffer.from(toAscii(`Platnosc: ${order.platnosc}\n`), 'utf-8'));
+          if (order.is_kupony) {
+            receipt.push(...Buffer.from('KUPONY\n', 'utf-8'));
+          }
+          if (order.kierowca_nazwa) {
+            receipt.push(...Buffer.from(toAscii(`Kierowca: ${order.kierowca_nazwa}\n`), 'utf-8'));
+          }
+          receipt.push(...Buffer.from('================================\n', 'utf-8'));
+          receipt.push(LF);
+          receipt.push(...CENTER);
+          receipt.push(...Buffer.from('Smacznego!\n', 'utf-8'));
+          receipt.push(LF, LF, LF, LF);
+          
+          try {
+            const buffer = Buffer.from(receipt);
+            fs.writeFileSync(printerPath, buffer);
+            console.log(` Wydrukowano paragon dla zamówienia #${order.id}`);
+            resolve();
+          } catch (err) {
+            console.error(' Błąd wysyłania do drukarki:', err.message);
+            reject(err);
+          }
+        });
+      };
+      
+      // Drukuj zamówienie
+      await printReceipt(orders[0]);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: true, orderId: orders[0].id }));
+      
+      if (connection) await connection.end();
+    } catch (error) {
+      console.error('Błąd drukowania ostatniego zamówienia:', error);
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: error.message }));
+      if (connection) await connection.end();
+    }
+    return;
+  }
+  
   // Główna strona
   res.writeHead(200, { 
     'Content-Type': 'text/html; charset=utf-8',
@@ -2784,9 +3015,6 @@ const server = http.createServer(async (req, res) => {
       </button>
       <button class="apply-btn" onclick="window.location.href='/sesja'" style="background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4); padding: 16px 28px; font-size: 15px;">
         Sesja
-      </button>
-      <button class="apply-btn" onclick="window.location.href='/zakupy-lista'" style="background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4); padding: 16px 28px; font-size: 15px;">
-        Lista zakupów
       </button>
     </div>
   

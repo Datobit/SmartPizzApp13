@@ -1,0 +1,110 @@
+ ╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║          🍕 PizzApp13 - INSTRUKCJA OFFLINE 🍕               ║
+║                                                              ║
+║          Jak uruchomić aplikację BEZ INTERNETU              ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+
+═══════════════════════════════════════════════════════════════
+  🚀 SZYBKIE URUCHOMIENIE
+═══════════════════════════════════════════════════════════════
+
+1. Kliknij dwukrotnie na plik:
+
+   📄 START-PIZZAPP-OFFLINE.desktop
+
+   LUB uruchom w terminalu:
+
+   ./START-OFFLINE.sh
+
+
+2. Aplikacja otworzy się automatycznie w przeglądarce!
+
+
+═══════════════════════════════════════════════════════════════
+  ⚠️ WAŻNE - Adres aplikacji
+═══════════════════════════════════════════════════════════════
+
+Aby aplikacja działała BEZ INTERNETU, musisz użyć:
+
+   ✅ DZIAŁA:    http://127.0.0.1:3000
+   ❌ NIE DZIAŁA: http://localhost:3000
+
+
+Zapisz jako zakładkę w przeglądarce:
+
+   http://127.0.0.1:3000
+
+
+═══════════════════════════════════════════════════════════════
+  📖 Dlaczego 127.0.0.1 zamiast localhost?
+═══════════════════════════════════════════════════════════════
+
+• "localhost" wymaga DNS (internetu) aby być rozpoznanym
+• "127.0.0.1" to adres IP - działa zawsze, nawet bez internetu
+• Oba adresy prowadzą do tego samego miejsca (Twojego komputera)
+
+
+═══════════════════════════════════════════════════════════════
+  🔧 Rozwiązywanie problemów
+═══════════════════════════════════════════════════════════════
+
+Problem: "Nie mogę otworzyć strony"
+Rozwiązanie: Sprawdź czy używasz 127.0.0.1:3000
+
+
+Problem: "Pizze się nie ładują"
+Rozwiązanie: 
+1. Sprawdź czy MariaDB działa:
+   systemctl status mariadb
+
+2. Uruchom ponownie aplikację:
+   ./START-OFFLINE.sh
+
+
+Problem: "Ulice się nie podpowiadają"
+Rozwiązanie: Upewnij się że używasz adresu 127.0.0.1:3000
+
+
+═══════════════════════════════════════════════════════════════
+  📁 Dodatkowe pliki
+═══════════════════════════════════════════════════════════════
+
+OFFLINE-CONFIG.md       - Szczegółowa dokumentacja techniczna
+OFFLINE-REDIRECT.html   - Strona przekierowująca na 127.0.0.1
+START-OFFLINE.sh        - Skrypt uruchamiający (terminal)
+START-PIZZAPP-OFFLINE.desktop - Skrypt uruchamiający (GUI)
+
+
+═══════════════════════════════════════════════════════════════
+  ✅ Checklist - Co musi działać
+═══════════════════════════════════════════════════════════════
+
+□ MariaDB uruchomiona (systemctl status mariadb)
+□ Serwer Next.js działa (npm run dev)
+□ Przeglądarka otwarta na: http://127.0.0.1:3000
+
+
+═══════════════════════════════════════════════════════════════
+  🛑 Zatrzymywanie aplikacji
+═══════════════════════════════════════════════════════════════
+
+W terminalu naciśnij: Ctrl + C
+
+LUB uruchom:
+
+   ./STOP-PIZZERIA.sh
+
+LUB ręcznie:
+
+   pkill -f "next dev"
+
+
+═══════════════════════════════════════════════════════════════
+
+Data utworzenia: 2026-01-14
+Wersja: 1.0 OFFLINE
+
+═══════════════════════════════════════════════════════════════

@@ -2,6 +2,27 @@
 
 System zarządzania zamówieniami pizzy z integracją drukarki fiskalnej.
 
+## ⚠️ PRACA OFFLINE (BEZ INTERNETU)
+
+**WAŻNE**: Aplikacja działa bez internetu, ale musisz użyć adresu IP zamiast "localhost"!
+
+### Szybkie uruchomienie OFFLINE:
+```bash
+./START-OFFLINE.sh
+```
+
+### Lub ręcznie otwórz w przeglądarce:
+```
+http://127.0.0.1:3000
+```
+
+**NIE UŻYWAJ**: `http://localhost:3000` (wymaga internetu do DNS)  
+**UŻYWAJ**: `http://127.0.0.1:3000` (działa bez internetu)
+
+📖 Więcej informacji: [OFFLINE-CONFIG.md](OFFLINE-CONFIG.md)
+
+---
+
 ## Funkcje
 
 - [LISTA] Formularz zamówień z wyborem pizzy, napojów i dodatków
@@ -10,6 +31,7 @@ System zarządzania zamówieniami pizzy z integracją drukarki fiskalnej.
 -  **Drukowanie paragonów na drukarce Xprinter** (nowe!)
 -  Baza danych MariaDB
 -  Interfejs z Tailwind CSS
+-  **✅ Praca offline (bez internetu)**
 
 ## Wymagania
 
@@ -25,10 +47,17 @@ npm install
 
 ## Uruchomienie
 
-### Serwer Next.js (formularz zamówień)
+### Metoda 1: Tryb OFFLINE (ZALECANE)
+```bash
+./START-OFFLINE.sh
+# Automatycznie otwiera http://127.0.0.1:3000
+```
+
+### Metoda 2: Serwer Next.js (formularz zamówień)
 ```bash
 npm run dev
-# http://localhost:3000
+# Otwórz: http://127.0.0.1:3000 (działa bez internetu)
+# Lub: http://localhost:3000 (wymaga internetu)
 ```
 
 ### Viewer zamówień

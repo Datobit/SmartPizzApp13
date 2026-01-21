@@ -588,6 +588,118 @@
     .key.polish-row:hover {
       background: #0d9488;
     }
+    
+    /* Modal do zamykania sesji */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease-out;
+    }
+    
+    .modal-overlay.show {
+      display: flex;
+    }
+    
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    
+    @keyframes slideUp {
+      from {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    .modal-dialog {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+      animation: slideUp 0.3s ease-out;
+    }
+    
+    .modal-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    
+    .modal-title {
+      color: #1f2937;
+      font-size: 1.5em;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    
+    .modal-message {
+      color: #4b5563;
+      font-size: 1.1em;
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    
+    .modal-amount {
+      color: hsl(25 95% 53%);
+      font-size: 1.8em;
+      font-weight: 800;
+      margin: 16px 0;
+    }
+    
+    .modal-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 32px;
+    }
+    
+    .modal-btn {
+      padding: 16px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1em;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .modal-btn-cancel {
+      background: #e5e7eb;
+      color: #374151;
+    }
+    
+    .modal-btn-cancel:hover {
+      background: #d1d5db;
+    }
+    
+    .modal-btn-confirm {
+      background: #dc2626;
+      color: white;
+    }
+    
+    .modal-btn-confirm:hover {
+      background: #b91c1c;
+      box-shadow: 0 6px 18px rgba(220, 38, 38, 0.4);
+    }
   </style>
 </head>
 <body>
@@ -839,9 +951,9 @@
             let typ = '';
             let className = '';
             
-            // Transakcje z kartą - czarna czcionka, nie wlicza się do salda
-            if (formaPlatnosci === 'karta') {
-              typ = t.typ === 'wplyw' ? 'Wpływ (karta)' : 'Wydatek (karta)';
+            // Transakcje z kartą i online - czarna czcionka, nie wlicza się do salda
+            if (formaPlatnosci === 'karta' || formaPlatnosci === 'online') {
+              typ = t.typ === 'wplyw' ? `Wpływ (${formaPlatnosci})` : `Wydatek (${formaPlatnosci})`;
               className = '';
             }
             // Transakcje z gotówką - zielona czcionka, wlicza się do salda
@@ -856,7 +968,8 @@
             }
             
             const formaLabel = formaPlatnosci === 'gotowka' ? 'Gotówka' : 
-                              formaPlatnosci === 'karta' ? 'Karta' : 'Manualny';
+                              formaPlatnosci === 'karta' ? 'Karta' :
+                              formaPlatnosci === 'online' ? 'Online' : 'Manualny';
             
             html += `
               <tr>
@@ -906,9 +1019,9 @@
             let typ = '';
             let className = '';
             
-            // Transakcje z kartą - czarna czcionka, nie wlicza się do salda
-            if (formaPlatnosci === 'karta') {
-              typ = t.typ === 'wplyw' ? 'Wpływ (karta)' : 'Wydatek (karta)';
+            // Transakcje z kartą i online - czarna czcionka, nie wlicza się do salda
+            if (formaPlatnosci === 'karta' || formaPlatnosci === 'online') {
+              typ = t.typ === 'wplyw' ? `Wpływ (${formaPlatnosci})` : `Wydatek (${formaPlatnosci})`;
               className = '';
             }
             // Transakcje z gotówką - zielona czcionka, wlicza się do salda
@@ -923,7 +1036,8 @@
             }
             
             const formaLabel = formaPlatnosci === 'gotowka' ? 'Gotówka' : 
-                              formaPlatnosci === 'karta' ? 'Karta' : 'Manualny';
+                              formaPlatnosci === 'karta' ? 'Karta' :
+                              formaPlatnosci === 'online' ? 'Online' : 'Manualny';
             
             html += `
               <tr>
@@ -1043,12 +1157,41 @@
       }
     }
     
+    let pendingCloseSession = null;
+    
     async function zamknijSesje(sesjaId, kierowcaNazwa, saldo) {
-      const message = saldo >= 0 
-        ? `Kierowca ${kierowcaNazwa} musi oddać do kasy ${saldo.toFixed(2)} PLN.\n\nZamknąć sesję?`
-        : `Kierowca ${kierowcaNazwa} ma niedobór ${Math.abs(saldo).toFixed(2)} PLN.\n\nZamknąć sesję?`;
+      // Przechowaj dane do późniejszego użycia
+      pendingCloseSession = { sesjaId, kierowcaNazwa, saldo };
       
-      if (!confirm(message)) return;
+      // Ustaw treść modala
+      const messageEl = document.getElementById('modalMessage');
+      const amountEl = document.getElementById('modalAmount');
+      
+      if (saldo >= 0) {
+        messageEl.textContent = `Kierowca ${kierowcaNazwa} musi oddać do kasy:`;
+        amountEl.textContent = `${saldo.toFixed(2)} PLN`;
+      } else {
+        messageEl.textContent = `Kierowca ${kierowcaNazwa} ma niedobór:`;
+        amountEl.textContent = `${Math.abs(saldo).toFixed(2)} PLN`;
+        amountEl.style.color = '#dc2626';
+      }
+      
+      // Pokaż modal
+      document.getElementById('closeSessionModal').classList.add('show');
+    }
+    
+    function hideCloseSessionModal() {
+      document.getElementById('closeSessionModal').classList.remove('show');
+      pendingCloseSession = null;
+    }
+    
+    async function confirmCloseSession() {
+      if (!pendingCloseSession) return;
+      
+      const { sesjaId, kierowcaNazwa } = pendingCloseSession;
+      
+      // Ukryj modal
+      hideCloseSessionModal();
       
       try {
         const res = await fetch('/api/sesje/zamknij', {
@@ -1160,7 +1303,7 @@
     // ========== KLAWIATURA EKRANOWA ==========
     let activeInput = null;
     let capsLock = false;
-    let showPolishChars = false;
+    let showPolishChars = true;
     let keyboardType = 'text'; // 'text' lub 'numeric'
     
     function setActiveInput(input) {
@@ -1233,7 +1376,7 @@
           </div>
           
           <!-- Rząd polskich znaków (ukryty domyślnie) -->
-          <div id="polish_row_${sesjaId}" class="keyboard-row row-polish" style="display: none; background: #0f766e; padding: 8px; border-radius: 6px; margin-bottom: 6px;">
+          <div id="polish_row_${sesjaId}" class="keyboard-row row-polish" style="display: grid; background: #0f766e; padding: 8px; border-radius: 6px; margin-bottom: 6px;">
             ${['Ą','Ć','Ę','Ł','Ń','Ó','Ś','Ź','Ż'].map(k => 
               `<button class="key polish-row" onclick="insertText(capsLock ? '${k}' : '${k.toLowerCase()}')">${k}</button>`
             ).join('')}
@@ -1255,11 +1398,13 @@
           
           <!-- Rząd 4: Shift, ZXCVBNM, Backspace -->
           <div class="keyboard-row row-zxcv">
-            <button class="key special shift" id="shift_${sesjaId}" onclick="toggleCapsLock(${sesjaId})">⬆</button>
+            <button class="key special shift" id="shift_${sesjaId}" onclick="toggleCapsLock(${sesjaId})">
+              <span id="shift_icon_${sesjaId}">⇧</span>
+            </button>
             ${['Z','X','C','V','B','N','M'].map(k => 
               `<button class="key" onclick="insertText(capsLock ? '${k}' : '${k.toLowerCase()}')">${k}</button>`
             ).join('')}
-            <button class="key special" onclick="deleteChar()">✕</button>
+            <button class="key special" style="background: #dc2626; font-weight: bold;" onclick="deleteChar()">⌫</button>
           </div>
           
           <!-- Rząd 5: 123, PL, przecinek, spacja, kropka, enter -->
@@ -1314,8 +1459,12 @@
     function toggleCapsLock(sesjaId) {
       capsLock = !capsLock;
       const btn = document.getElementById(`shift_${sesjaId}`);
+      const icon = document.getElementById(`shift_icon_${sesjaId}`);
       if (btn) {
         btn.classList.toggle('active', capsLock);
+      }
+      if (icon) {
+        icon.textContent = capsLock ? '⇪' : '⇧';
       }
       updatePolishKeys(sesjaId);
     }
@@ -1363,5 +1512,26 @@
       if (numericKeyboard) numericKeyboard.style.display = 'none';
     }
   </script>
+  
+  <!-- Modal do zamykania sesji -->
+  <div id="closeSessionModal" class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Czy na pewno chcesz zamknąć sesję?</h3>
+      </div>
+      <div class="modal-body">
+        <p class="modal-message" id="modalMessage"></p>
+        <div class="modal-amount" id="modalAmount"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-cancel" onclick="hideCloseSessionModal()">
+          Anuluj
+        </button>
+        <button class="modal-btn modal-btn-confirm" onclick="confirmCloseSession()">
+          Zamknij sesję
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

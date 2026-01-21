@@ -792,7 +792,7 @@
     // ========== KLAWIATURA EKRANOWA ==========
     let activeInput = null;
     let capsLock = false;
-    let showPolishChars = false;
+    let showPolishChars = true;
     let keyboardType = 'text'; // 'text' lub 'numeric'
     
     function setActiveInput(input) {
@@ -856,7 +856,7 @@
           </div>
           
           <!-- Rząd polskich znaków (ukryty domyślnie) -->
-          <div id="polish_row" class="keyboard-row row-polish" style="display: none; background: #0f766e; padding: 8px; border-radius: 6px; margin-bottom: 6px;">
+          <div id="polish_row" class="keyboard-row row-polish" style="display: grid; background: #0f766e; padding: 8px; border-radius: 6px; margin-bottom: 6px;">
             ${['Ą','Ć','Ę','Ł','Ń','Ó','Ś','Ź','Ż'].map(k => 
               `<button class="key polish-row" onclick="insertText(capsLock ? '${k}' : '${k.toLowerCase()}')">${k}</button>`
             ).join('')}
@@ -878,11 +878,13 @@
           
           <!-- Rząd 4: Shift, ZXCVBNM, Backspace -->
           <div class="keyboard-row row-zxcv">
-            <button class="key special shift" id="shift_btn" onclick="toggleCapsLock()">⬆</button>
+            <button class="key special shift" id="shift_btn" onclick="toggleCapsLock()">
+              <span id="shift_icon">⇧</span>
+            </button>
             ${['Z','X','C','V','B','N','M'].map(k => 
               `<button class="key" onclick="insertText(capsLock ? '${k}' : '${k.toLowerCase()}')">${k}</button>`
             ).join('')}
-            <button class="key special" onclick="deleteChar()">✕</button>
+            <button class="key special" style="background: #dc2626; font-weight: bold;" onclick="deleteChar()">⌫</button>
           </div>
           
           <!-- Rząd 5: 123, PL, przecinek, spacja, kropka, enter -->
@@ -937,8 +939,12 @@
     function toggleCapsLock() {
       capsLock = !capsLock;
       const btn = document.getElementById('shift_btn');
+      const icon = document.getElementById('shift_icon');
       if (btn) {
         btn.classList.toggle('active', capsLock);
+      }
+      if (icon) {
+        icon.textContent = capsLock ? '⇪' : '⇧';
       }
       updatePolishKeys();
     }

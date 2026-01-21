@@ -144,6 +144,7 @@ enum transakcje_typ {
 enum transakcje_forma_platnosci {
   gotowka
   karta
+  online
   manualny
 }
 

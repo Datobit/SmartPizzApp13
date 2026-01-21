@@ -1,9 +1,0 @@
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=▶️ START PIZZERIA
-Comment=Uruchom SmartPizzApp13
-Exec=gnome-terminal -- bash -c "cd /home/pizzapp13/Documents/PizzApp13/SmartPizzApp13 && ./start-smartpizzapp.sh; exec bash"
-Icon=media-playback-start
-Terminal=false
-Categories=Application;

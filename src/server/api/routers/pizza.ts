@@ -414,7 +414,7 @@ export const pizzaRouter = createTRPCRouter({
         }),
         napojeIds: z.array(z.number()).optional(),
         pozycjeExtraIds: z.array(z.number()).optional(),
-        platnosc: z.enum(["gotowka", "karta"]),
+        platnosc: z.enum(["gotowka", "karta", "online"]),
         isKupony: z.boolean().optional(),
         typZamowienia: z.enum(["na_miejscu", "na_wynos", "dowoz"]).optional(),
         skladniki: z.string().optional(),
@@ -666,7 +666,7 @@ export const pizzaRouter = createTRPCRouter({
       if (input.sesjaId && input.typZamowienia === 'dowoz') {
         console.log(`Dodaję transakcję ${priceResult} PLN do sesji ${input.sesjaId} (${input.platnosc})`);
         try {
-          // Dla gotówki - wpływ, dla karty - wpływ ale nie wliczane do salda (forma_platnosci = karta)
+          // Dla gotówki - wpływ, dla karty i online - wpływ ale nie wliczane do salda (forma_platnosci = karta/online)
           await db.$executeRaw`
             INSERT INTO transakcje (sesja_id, typ, kwota, forma_platnosci, opis)
             VALUES (${input.sesjaId}, 'wplyw', ${priceResult}, ${input.platnosc}, ${`Zamówienie - ${input.adres}`})

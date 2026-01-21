@@ -32,7 +32,7 @@ interface OrderData {
   };
   napojeIds: number[];
   pozycjeExtraIds: number[];
-  platnosc: "gotowka" | "karta";
+  platnosc: "gotowka" | "karta" | "online";
 }
 
 export default function Home() {
@@ -78,7 +78,7 @@ export default function Home() {
   const [activeInputRef, setActiveInputRef] = useState<React.RefObject<HTMLInputElement> | null>(null);
   const [keyboardType, setKeyboardType] = useState<'text' | 'numeric'>('text');
   const [capsLock, setCapsLock] = useState(false);
-  const [showPolishChars, setShowPolishChars] = useState(false);
+  const [showPolishChars, setShowPolishChars] = useState(true);
   const [formModified, setFormModified] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -143,6 +143,11 @@ export default function Home() {
       
       if (!numerDomu.trim()) {
         toast.error("Numer domu jest wymagany");
+        return;
+      }
+      
+      if (!wybranaSesjaId) {
+        toast.error("Wybierz kierowcę dla dowozu!");
         return;
       }
     }
@@ -211,7 +216,7 @@ export default function Home() {
       if (result && result.success) {
         // Wywołaj endpoint drukowania
         try {
-          const printResponse = await fetch('http://localhost:3006/api/print-latest', {
+          const printResponse = await fetch('http://127.0.0.1:3006/api/print-latest', {
             method: 'POST',
           });
           
@@ -695,7 +700,7 @@ export default function Home() {
   };
 
   // Pobierz listę modyfikacji z cenami
-  const getModificationsList = (pizza: PizzaSelection): Array<{nazwa: string, cena: number}> => {
+  const getModificationsList = (pizza: PizzaSelection): Array<{nazwa: string, cena: number | null}> => {
     console.log("=== getModificationsList ===");
     console.log("Pizza:", pizza.nazwa);
     console.log("Pizza modifications:", pizza.modifications);
@@ -812,6 +817,11 @@ export default function Home() {
       
       if (!numerDomu.trim()) {
         toast.error("Numer domu jest wymagany");
+        return;
+      }
+      
+      if (!wybranaSesjaId) {
+        toast.error("Wybierz kierowcę dla dowozu!");
         return;
       }
     }
@@ -1420,18 +1430,8 @@ export default function Home() {
                           </button>
                         </div>
                         
-                        {/* Row 5: ABC button and Enter */}
-                        <div className="grid grid-cols-3 gap-1">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setKeyboardType('text');
-                            }}
-                            className="col-span-2 bg-gray-600 text-white p-2 rounded-lg text-sm font-semibold hover:bg-gray-500"
-                          >
-                            ABC
-                          </button>
+                        {/* Row 5: Enter button */}
+                        <div className="grid grid-cols-1 gap-1">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1636,9 +1636,9 @@ export default function Home() {
                               e.preventDefault();
                               setCapsLock(!capsLock);
                             }}
-                            className={`bg-gray-600 text-white p-2 rounded-lg text-lg hover:bg-gray-500 ${capsLock ? 'bg-teal-600' : ''}`}
+                            className={`bg-gray-600 text-white p-2 rounded-lg text-lg font-bold hover:bg-gray-500 ${capsLock ? 'bg-teal-600' : ''}`}
                           >
-                            
+                            {capsLock ? '⇪' : '⇧'}
                           </button>
                           {['Z', 'X', 'C', 'V', 'B', 'N', 'M'].map((key) => (
                             <button
@@ -1706,31 +1706,21 @@ export default function Home() {
                                 });
                               }
                             }}
-                            className="col-span-2 bg-gray-600 text-white p-2 rounded-lg text-lg hover:bg-gray-500"
+                            className="col-span-2 bg-red-600 text-white p-2 rounded-lg text-lg font-bold hover:bg-red-500"
                           >
-                            
+                            ⌫
                           </button>
                         </div>
                         
-                        {/* Row 5: 123, PL, comma, space, period, enter */}
+                        {/* Row 5: PL, comma, space, period, enter */}
                         <div className="grid grid-cols-12 gap-1">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setKeyboardType('numeric');
-                            }}
-                            className="col-span-2 bg-gray-600 text-white p-2 rounded-lg text-sm font-semibold hover:bg-gray-500"
-                          >
-                            123
-                          </button>
                           <button
                             type="button"
                             onClick={(e) => {
                               e.preventDefault();
                               setShowPolishChars(!showPolishChars);
                             }}
-                            className={`bg-gray-600 text-white p-2 rounded-lg text-sm font-semibold hover:bg-gray-500 ${showPolishChars ? 'bg-teal-600' : ''}`}
+                            className={`col-span-2 bg-gray-600 text-white p-2 rounded-lg text-sm font-semibold hover:bg-gray-500 ${showPolishChars ? 'bg-teal-600' : ''}`}
                           >
                             PL
                           </button>
@@ -2176,7 +2166,7 @@ export default function Home() {
             <Card>
               <CardContent className="py-4">
                 <div className="flex items-center gap-6">
-                  <span className="text-base font-bold text-muted-foreground whitespace-nowrap">Sosy (2 PLN/szt)</span>
+                  <span className="text-base font-bold text-muted-foreground whitespace-nowrap">Sosy</span>
                   
                   {/* Sos pomidorowy */}
                   <div className="flex items-center gap-3 bg-secondary/30 rounded-lg px-4 py-2">
@@ -2391,7 +2381,7 @@ export default function Home() {
                         name="platnosc"
                         value="gotowka"
                         checked={orderData.platnosc === "gotowka"}
-                        onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
+                        onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" | "online" }))}
                         className="w-5 h-5"
                       />
                       <span className="text-base font-semibold">Gotówka</span>
@@ -2403,10 +2393,22 @@ export default function Home() {
                         name="platnosc"
                         value="karta"
                         checked={orderData.platnosc === "karta"}
-                        onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" }))}
+                        onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" | "online" }))}
                         className="w-5 h-5"
                       />
                       <span className="text-base font-semibold">Karta</span>
+                    </label>
+                    <label className="flex items-center space-x-3 cursor-pointer p-3 border-2 rounded-lg transition-all hover:bg-accent/50"
+                           style={{ borderColor: orderData.platnosc === "online" ? "hsl(var(--primary))" : "hsl(var(--border))" }}>
+                      <input
+                        type="radio"
+                        name="platnosc"
+                        value="online"
+                        checked={orderData.platnosc === "online"}
+                        onChange={(e) => setOrderData(prev => ({ ...prev, platnosc: e.target.value as "gotowka" | "karta" | "online" }))}
+                        className="w-5 h-5"
+                      />
+                      <span className="text-base font-semibold">Online</span>
                     </label>
                   </div>
                   {orderData.platnosc === "gotowka" && typZamowienia === "dowoz" && (

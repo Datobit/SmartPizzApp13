@@ -1,9 +1,0 @@
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=⏹️ STOP PIZZERIA
-Comment=Zatrzymaj SmartPizzApp13
-Exec=gnome-terminal -- bash -c "cd /home/pizzapp13/Documents/PizzApp13/SmartPizzApp13 && ./stop-smartpizzapp.sh; echo ''; echo 'Naciśnij ENTER aby zamknąć...'; read"
-Icon=media-playback-stop
-Terminal=false
-Categories=Application;

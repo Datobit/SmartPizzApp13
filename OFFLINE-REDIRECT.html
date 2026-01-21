@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PizzApp13 - Przekierowanie OFFLINE</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        .info {
+            font-size: 1.2em;
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+        .redirect-btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 15px 40px;
+            font-size: 1.3em;
+            color: white;
+            background: #4CAF50;
+            border: none;
+            border-radius: 10px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .redirect-btn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        .countdown {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .warning {
+            background: rgba(255, 152, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍕 PizzApp13</h1>
+        <div class="warning">
+            <strong>⚠️ UWAGA:</strong> Aplikacja działa bez internetu!
+        </div>
+        <div class="info">
+            Aby aplikacja działała BEZ INTERNETU,<br>
+            musisz użyć adresu IP zamiast "localhost"
+        </div>
+        <div class="countdown" id="countdown">
+            Przekierowanie za: <span id="timer">3</span>s
+        </div>
+        <a href="http://127.0.0.1:3000" class="redirect-btn">
+            Przejdź do aplikacji (127.0.0.1:3000)
+        </a>
+        <div class="info" style="margin-top: 30px; font-size: 0.9em;">
+            <strong>Zapisz ten adres jako zakładkę:</strong><br>
+            <code style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; display: inline-block; margin-top: 10px;">
+                http://127.0.0.1:3000
+            </code>
+        </div>
+    </div>
+
+    <script>
+        // Automatyczne przekierowanie po 3 sekundach
+        let seconds = 3;
+        const timerElement = document.getElementById('timer');
+        
+        const countdown = setInterval(() => {
+            seconds--;
+            timerElement.textContent = seconds;
+            
+            if (seconds <= 0) {
+                clearInterval(countdown);
+                window.location.href = 'http://127.0.0.1:3000';
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
