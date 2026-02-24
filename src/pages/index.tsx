@@ -20,6 +20,8 @@ interface PizzaSelection {
     nazwa: string;
   };
   modifications?: Record<number, number>; // id_skladnik -> zmiana ilości (np. -1, +1)
+  modificationsLeft?: Record<number, number>; // modyfikacje pierwszej połowy (pół na pół)
+  modificationsRight?: Record<number, number>; // modyfikacje drugiej połowy (pół na pół)
 }
 
 interface OrderData {
@@ -69,6 +71,8 @@ export default function Home() {
   const [showPolNaPolSelector, setShowPolNaPolSelector] = useState(false);
   const [firstPizzaId, setFirstPizzaId] = useState<number | null>(null);
   const [expandedPizzaIndex, setExpandedPizzaIndex] = useState<number | null>(null);
+  const [showExtraSelector, setShowExtraSelector] = useState(false);
+  const [showNapojSelector, setShowNapojSelector] = useState(false);
   const [dzielnicaNazwa, setDzielnicaNazwa] = useState<string>("");
   const [customDeliveryPrice, setCustomDeliveryPrice] = useState<number | null>(null);
   const [userManuallyChangedDzielnica, setUserManuallyChangedDzielnica] = useState(false);
@@ -90,6 +94,7 @@ export default function Home() {
   const ulicaInputRef = useRef<HTMLInputElement>(null);
   const mieszkanieInputRef = useRef<HTMLInputElement>(null);
   const dodatkoweInfoInputRef = useRef<HTMLInputElement>(null);
+  const deliveryPriceInputRef = useRef<HTMLInputElement>(null);
 
   // Queries
   const { data: pizzas, isLoading: pizzasLoading, error: pizzasError } = api.pizza.getAllPizzas.useQuery();
@@ -191,27 +196,72 @@ export default function Home() {
       // Przygotuj obiekt modyfikacjeSkladnikow
       const modyfikacjeSkladnikow: Record<string, Record<string, number>> = {};
       orderData.pizze.forEach((pizza, index) => {
-        if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
-          const modsByName: Record<string, number> = {};
-          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
-          
-          Object.entries(pizza.modifications).forEach(([skladnikIdStr, change]) => {
-            const skladnikId = parseInt(skladnikIdStr);
-            const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
-            if (skladnik) {
-              const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
-              const baseCount = isBase ? 1 : 0;
-              const totalCount = baseCount + change;
-              
-              if (totalCount > 0) {
-                modsByName[skladnik.nazwa] = totalCount;
+        const modsByName: Record<string, number> = {};
+        
+        // Dla pizzy pół na pół - zbierz modyfikacje z obu połówek
+        if (pizza.polNaPol) {
+          // Lewa połowa (pierwsza pizza)
+          if (pizza.modificationsLeft && Object.keys(pizza.modificationsLeft).length > 0) {
+            const pizzaDefLeft = pizzas?.find((p: any) => p.id === pizza.id);
+            
+            Object.entries(pizza.modificationsLeft).forEach(([skladnikIdStr, change]) => {
+              const skladnikId = parseInt(skladnikIdStr);
+              const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
+              if (skladnik && change > 0) {
+                const isBase = pizzaDefLeft?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+                const baseCount = isBase ? 1 : 0;
+                const totalCount = baseCount + change;
+                
+                if (totalCount > 0) {
+                  // Dla pół na pół sumujemy obie połowy
+                  modsByName[skladnik.nazwa] = (modsByName[skladnik.nazwa] || 0) + totalCount;
+                }
               }
-            }
-          });
-          
-          if (Object.keys(modsByName).length > 0) {
-            modyfikacjeSkladnikow[index.toString()] = modsByName;
+            });
           }
+          
+          // Prawa połowa (druga pizza)
+          if (pizza.modificationsRight && Object.keys(pizza.modificationsRight).length > 0) {
+            const pizzaDefRight = pizzas?.find((p: any) => p.id === pizza.polNaPol.id);
+            
+            Object.entries(pizza.modificationsRight).forEach(([skladnikIdStr, change]) => {
+              const skladnikId = parseInt(skladnikIdStr);
+              const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
+              if (skladnik && change > 0) {
+                const isBase = pizzaDefRight?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+                const baseCount = isBase ? 1 : 0;
+                const totalCount = baseCount + change;
+                
+                if (totalCount > 0) {
+                  // Dla pół na pół sumujemy obie połowy
+                  modsByName[skladnik.nazwa] = (modsByName[skladnik.nazwa] || 0) + totalCount;
+                }
+              }
+            });
+          }
+        } else {
+          // Standardowa pizza (nie pół na pół)
+          if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
+            const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+            
+            Object.entries(pizza.modifications).forEach(([skladnikIdStr, change]) => {
+              const skladnikId = parseInt(skladnikIdStr);
+              const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
+              if (skladnik) {
+                const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+                const baseCount = isBase ? 1 : 0;
+                const totalCount = baseCount + change;
+                
+                if (totalCount > 0) {
+                  modsByName[skladnik.nazwa] = totalCount;
+                }
+              }
+            });
+          }
+        }
+        
+        if (Object.keys(modsByName).length > 0) {
+          modyfikacjeSkladnikow[index.toString()] = modsByName;
         }
       });
       
@@ -425,10 +475,45 @@ export default function Home() {
       // Przygotuj modyfikacje składników w formacie: { "0": { "pieczarki": 2, "szynka": 0 }, "1": {...} }
       const modyfikacjeSkladnikow: Record<string, Record<string, number>> = {};
       orderData.pizze.forEach((pizza, index) => {
-        if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
-          // Musimy zamienić ID składników na nazwy i obliczyć CAŁKOWITĄ ilość (baza + modyfikacja)
-          const modsByName: Record<string, number> = {};
+        const modsByName: Record<string, number> = {};
+        
+        // Dla pizzy pół na pół - zbierz modyfikacje z obu połówek
+        if (pizza.polNaPol && (pizza.modificationsLeft || pizza.modificationsRight)) {
+          // Pobierz definicje obu pizz
+          const pizzaDef1 = pizza.polNaPol?.pizzaId1 ? pizzas?.find((p: any) => p.id === pizza.polNaPol?.pizzaId1) : null;
+          const pizzaDef2 = pizza.polNaPol?.pizzaId2 ? pizzas?.find((p: any) => p.id === pizza.polNaPol?.pizzaId2) : null;
           
+          // Zbierz modyfikacje z lewej połowy
+          if (pizza.modificationsLeft && Object.keys(pizza.modificationsLeft).length > 0) {
+            Object.entries(pizza.modificationsLeft).forEach(([skladnikIdStr, change]) => {
+              const skladnikId = parseInt(skladnikIdStr);
+              const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
+              if (skladnik && change > 0) {
+                // Sprawdź czy składnik jest bazowy w lewej pizzy
+                const isBase = pizzaDef1?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+                const baseCount = isBase ? 1 : 0;
+                const totalCount = baseCount + change;
+                modsByName[skladnik.nazwa] = (modsByName[skladnik.nazwa] || 0) + totalCount;
+              }
+            });
+          }
+          
+          // Zbierz modyfikacje z prawej połowy
+          if (pizza.modificationsRight && Object.keys(pizza.modificationsRight).length > 0) {
+            Object.entries(pizza.modificationsRight).forEach(([skladnikIdStr, change]) => {
+              const skladnikId = parseInt(skladnikIdStr);
+              const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
+              if (skladnik && change > 0) {
+                // Sprawdź czy składnik jest bazowy w prawej pizzy
+                const isBase = pizzaDef2?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+                const baseCount = isBase ? 1 : 0;
+                const totalCount = baseCount + change;
+                modsByName[skladnik.nazwa] = (modsByName[skladnik.nazwa] || 0) + totalCount;
+              }
+            });
+          }
+        } else if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
+          // Dla zwykłej pizzy - obsłuż standardowe modyfikacje
           // Pobierz definicję pizzy z bazy aby znać bazowe składniki
           const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
           
@@ -449,10 +534,10 @@ export default function Home() {
               }
             }
           });
-          
-          if (Object.keys(modsByName).length > 0) {
-            modyfikacjeSkladnikow[index.toString()] = modsByName;
-          }
+        }
+        
+        if (Object.keys(modsByName).length > 0) {
+          modyfikacjeSkladnikow[index.toString()] = modsByName;
         }
       });
       
@@ -704,13 +789,86 @@ export default function Home() {
     });
   };
 
+  // Aktualizuj składnik dla konkretnej połowy pizzy pół na pół
+  const updateIngredientHalf = (pizzaIndex: number, ingredientId: number, change: number, side: 'left' | 'right') => {
+    setOrderData(prev => {
+      const newPizze = [...prev.pizze];
+      const pizza = newPizze[pizzaIndex];
+      if (!pizza || !pizza.polNaPol) return prev;
+
+      const modsField = side === 'left' ? 'modificationsLeft' : 'modificationsRight';
+      const currentMods = pizza[modsField] || {};
+      const currentChange = currentMods[ingredientId] || 0;
+      const newChange = currentChange + change;
+
+      // Sprawdź bazową ilość dla odpowiedniej pizzy
+      const pizzaId = side === 'left' ? pizza.id : pizza.polNaPol.id;
+      const pizzaDef = pizzas?.find((p: any) => p.id === pizzaId);
+      const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === ingredientId);
+      const baseCount = isBase ? 1 : 0;
+
+      if (baseCount + newChange < 0) return prev;
+
+      const newMods = { ...currentMods, [ingredientId]: newChange };
+      
+      // Usuń wpis jeśli zmiana wynosi 0
+      if (newChange === 0) {
+        delete newMods[ingredientId];
+      }
+
+      newPizze[pizzaIndex] = { ...pizza, [modsField]: newMods };
+      return { ...prev, pizze: newPizze };
+    });
+  };
+
   // Oblicz koszt modyfikacji składników dla pizzy
   const calculateModificationCost = (pizza: PizzaSelection): number => {
+    let totalCost = 0;
+    
+    // Dla pizzy pół na pół - oblicz koszty obu połówek
+    if (pizza.polNaPol) {
+      // Lewa połowa
+      if (pizza.modificationsLeft && Object.keys(pizza.modificationsLeft).length > 0) {
+        Object.entries(pizza.modificationsLeft).forEach(([idStr, change]) => {
+          const id = parseInt(idStr);
+          const skladnik = skladniki?.find((s: any) => s.id === id);
+          if (!skladnik) return;
+
+          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+          const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
+
+          if (change > 0) {
+            // Połowa ceny bo tylko na połowie pizzy
+            totalCost += change * (skladnik.cena || 0) / 2;
+          }
+        });
+      }
+      
+      // Prawa połowa
+      if (pizza.modificationsRight && Object.keys(pizza.modificationsRight).length > 0) {
+        Object.entries(pizza.modificationsRight).forEach(([idStr, change]) => {
+          const id = parseInt(idStr);
+          const skladnik = skladniki?.find((s: any) => s.id === id);
+          if (!skladnik) return;
+
+          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.polNaPol?.id);
+          const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
+
+          if (change > 0) {
+            // Połowa ceny bo tylko na połowie pizzy
+            totalCost += change * (skladnik.cena || 0) / 2;
+          }
+        });
+      }
+      
+      return totalCost;
+    }
+    
+    // Standardowa pizza
     if (!pizza.modifications || Object.keys(pizza.modifications).length === 0) {
       return 0;
     }
 
-    let totalCost = 0;
     Object.entries(pizza.modifications).forEach(([idStr, change]) => {
       const id = parseInt(idStr);
       const skladnik = skladniki?.find((s: any) => s.id === id);
@@ -737,56 +895,139 @@ export default function Home() {
   };
 
   // Pobierz listę modyfikacji z cenami
-  const getModificationsList = (pizza: PizzaSelection): Array<{nazwa: string, cena: number | null}> => {
+  const getModificationsList = (pizza: PizzaSelection): Array<{nazwa: string, cena: number | null, kolor?: 'niebieski' | 'pomarańczowy' | 'czerwony'}> => {
     console.log("=== getModificationsList ===");
     console.log("Pizza:", pizza.nazwa);
     console.log("Pizza modifications:", pizza.modifications);
     console.log("Skladniki loaded:", skladniki?.length || 0);
     
-    if (!pizza.modifications || Object.keys(pizza.modifications).length === 0) {
-      console.log("Brak modyfikacji");
-      return [];
-    }
-
-    if (!skladniki || skladniki.length === 0) {
-      console.log("Skladniki nie załadowane");
-      return [];
-    }
-
-    const modifications: Array<{nazwa: string, cena: number | null}> = [];
+    const modifications: Array<{nazwa: string, cena: number | null, kolor?: 'niebieski' | 'pomarańczowy' | 'czerwony'}> = [];
     
-    Object.entries(pizza.modifications).forEach(([idStr, change]) => {
-      console.log(`Processing modification: ID=${idStr}, Change=${change}`);
-      
-      if (change === 0) {
-        console.log("Change === 0, skipping");
-        return;
+    // Sprawdź czy to pizza pół na pół
+    const isPolNaPol = pizza.polNaPol !== undefined;
+    
+    // Dla pizzy pół na pół - pokaż modyfikacje dla każdej połowy osobno
+    if (isPolNaPol) {
+      // Lewa połowa
+      if (pizza.modificationsLeft && Object.keys(pizza.modificationsLeft).length > 0) {
+        Object.entries(pizza.modificationsLeft).forEach(([idStr, change]) => {
+          if (change === 0) return;
+          
+          const id = parseInt(idStr);
+          const skladnik = skladniki?.find((s: any) => s.id === id);
+          
+          if (skladnik && skladnik.nazwa) {
+            const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+            const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
+            
+            if (change > 0) {
+              // Dodawanie składnika - niebieski, bez oznaczenia strony
+              const count = isBase ? change + 1 : change;
+              const cenaJednostkowa = skladnik.cena_srednia || 0;
+              const cenaCalkowiata = (cenaJednostkowa * count) / 2; // Połowa ceny dla pół na pół
+              const countStr = count > 1 ? `${count}x ` : '';
+              modifications.push({
+                nazwa: `${countStr}${skladnik.nazwa}`,
+                cena: cenaCalkowiata,
+                kolor: 'niebieski'
+              });
+            } else {
+              // Usuwanie składnika - czerwony, z oznaczeniem strony
+              modifications.push({
+                nazwa: `-${skladnik.nazwa} (lewa ←)`,
+                cena: null,
+                kolor: 'czerwony'
+              });
+            }
+          }
+        });
       }
       
-      const id = parseInt(idStr);
-      const skladnik = skladniki.find((s: any) => s.id === id);
+      // Prawa połowa
+      if (pizza.modificationsRight && Object.keys(pizza.modificationsRight).length > 0) {
+        Object.entries(pizza.modificationsRight).forEach(([idStr, change]) => {
+          if (change === 0) return;
+          
+          const id = parseInt(idStr);
+          const skladnik = skladniki?.find((s: any) => s.id === id);
+          
+          if (skladnik && skladnik.nazwa) {
+            const pizza2Def = pizzas?.find((p: any) => p.id === pizza.polNaPol);
+            const isBase = pizza2Def?.skladniki?.some((s: any) => s.id_skladnik === id);
+            
+            if (change > 0) {
+              // Dodawanie składnika - pomarańczowy, bez oznaczenia strony
+              const count = isBase ? change + 1 : change;
+              const cenaJednostkowa = skladnik.cena_srednia || 0;
+              const cenaCalkowiata = (cenaJednostkowa * count) / 2; // Połowa ceny dla pół na pół
+              const countStr = count > 1 ? `${count}x ` : '';
+              modifications.push({
+                nazwa: `${countStr}${skladnik.nazwa}`,
+                cena: cenaCalkowiata,
+                kolor: 'pomarańczowy'
+              });
+            } else {
+              // Usuwanie składnika - czerwony, z oznaczeniem strony
+              modifications.push({
+                nazwa: `-${skladnik.nazwa} (prawa →)`,
+                cena: null,
+                kolor: 'czerwony'
+              });
+            }
+          }
+        });
+      }
+    } else {
+      // Zwykła pizza - stara logika z poprawkami
+      if (!pizza.modifications || Object.keys(pizza.modifications).length === 0) {
+        console.log("Brak modyfikacji");
+        return [];
+      }
+
+      if (!skladniki || skladniki.length === 0) {
+        console.log("Skladniki nie załadowane");
+        return [];
+      }
       
-      console.log(`Looked for ID ${id}, found:`, skladnik);
-      
-      if (skladnik && skladnik.nazwa) {
-        if (change > 0) {
-          // Addition - show with price
-          const cenaValue = skladnik.cena_srednia || 0;
-          console.log(`Added: ${skladnik.nazwa}, cena: ${cenaValue}`);
-          modifications.push({
-            nazwa: skladnik.nazwa,
-            cena: cenaValue
-          });
-        } else {
-          // Removal - show with minus sign, no price
-          console.log(`Removed: -${skladnik.nazwa}`);
-          modifications.push({
-            nazwa: `-${skladnik.nazwa}`,
-            cena: null
-          });
+      Object.entries(pizza.modifications).forEach(([idStr, change]) => {
+        console.log(`Processing modification: ID=${idStr}, Change=${change}`);
+        
+        if (change === 0) {
+          console.log("Change === 0, skipping");
+          return;
         }
-      }
-    });
+        
+        const id = parseInt(idStr);
+        const skladnik = skladniki.find((s: any) => s.id === id);
+        
+        console.log(`Looked for ID ${id}, found:`, skladnik);
+        
+        if (skladnik && skladnik.nazwa) {
+          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+          const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
+          
+          if (change > 0) {
+            // Dodawanie - pokaż ilość i całkowitą cenę
+            const count = isBase ? change + 1 : change;
+            const cenaJednostkowa = skladnik.cena_srednia || 0;
+            const cenaCalkowiata = cenaJednostkowa * count;
+            const countStr = count > 1 ? `${count}x ` : '';
+            console.log(`Added: ${count}x ${skladnik.nazwa}, cena jednostkowa: ${cenaJednostkowa}, całkowita: ${cenaCalkowiata}`);
+            modifications.push({
+              nazwa: `${countStr}${skladnik.nazwa}`,
+              cena: cenaCalkowiata
+            });
+          } else {
+            // Usuwanie - pokaż z minusem, bez ceny
+            console.log(`Removed: -${skladnik.nazwa}`);
+            modifications.push({
+              nazwa: `-${skladnik.nazwa}`,
+              cena: null
+            });
+          }
+        }
+      });
+    }
 
     console.log("Final modifications:", modifications);
     return modifications;
@@ -798,39 +1039,98 @@ export default function Home() {
     const parts: string[] = [];
     
     orderData.pizze.forEach((pizza, index) => {
-      if (!pizza.modifications || Object.keys(pizza.modifications).length === 0) return;
+      // Dla pizzy pół na pół - obsłuż osobne modyfikacje dla każdej połowy
+      if (pizza.polNaPol) {
+        const leftMods: string[] = [];
+        const rightMods: string[] = [];
+        
+        // Lewa połowa (pierwsza pizza)
+        if (pizza.modificationsLeft && Object.keys(pizza.modificationsLeft).length > 0) {
+          Object.entries(pizza.modificationsLeft).forEach(([idStr, change]) => {
+            const id = parseInt(idStr);
+            const ingredient = skladniki?.find((s: any) => s.id === id);
+            if (!ingredient) return;
 
-      const pizzaName = pizza.nazwa;
-      const mods: string[] = [];
+            if (change < 0) {
+              leftMods.push(`-${ingredient.nazwa}`);
+            } else if (change > 0) {
+              const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+              const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
+              
+              if (isBase) {
+                leftMods.push(`${change + 1}+${ingredient.nazwa}`);
+              } else {
+                leftMods.push(change === 1 ? `+${ingredient.nazwa}` : `${change}+${ingredient.nazwa}`);
+              }
+            }
+          });
+        }
+        
+        // Prawa połowa (druga pizza)
+        if (pizza.modificationsRight && Object.keys(pizza.modificationsRight).length > 0) {
+          Object.entries(pizza.modificationsRight).forEach(([idStr, change]) => {
+            const id = parseInt(idStr);
+            const ingredient = skladniki?.find((s: any) => s.id === id);
+            if (!ingredient) return;
 
-      Object.entries(pizza.modifications).forEach(([idStr, change]) => {
-        const id = parseInt(idStr);
-        const ingredient = skladniki?.find((s: any) => s.id === id);
-        if (!ingredient) return;
-
-        if (change < 0) {
-          // Usunięcie
-          mods.push(`-${ingredient.nazwa}`);
-        } else if (change > 0) {
-          // Dodanie
-          // Sprawdź czy był w bazie
-          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
-          const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
+            if (change < 0) {
+              rightMods.push(`-${ingredient.nazwa}`);
+            } else if (change > 0) {
+              const pizzaDef = pizzas?.find((p: any) => p.id === pizza.polNaPol?.id);
+              const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
+              
+              if (isBase) {
+                rightMods.push(`${change + 1}+${ingredient.nazwa}`);
+              } else {
+                rightMods.push(change === 1 ? `+${ingredient.nazwa}` : `${change}+${ingredient.nazwa}`);
+              }
+            }
+          });
+        }
+        
+        if (leftMods.length > 0 || rightMods.length > 0) {
+          const firstName = pizzas?.find((p: any) => p.id === pizza.id)?.nazwa || 'Pizza';
+          const secondName = pizzas?.find((p: any) => p.id === pizza.polNaPol?.id)?.nazwa || 'Pizza';
           
-          if (isBase) {
-            mods.push(`${change + 1}+${ingredient.nazwa}`); // np. 2+ananas
-          } else {
-            if (change === 1) {
-              mods.push(`+${ingredient.nazwa}`);
+          let modText = `${pizza.nazwa}: `;
+          if (leftMods.length > 0) {
+            modText += `[${firstName}: ${leftMods.join(", ")}]`;
+          }
+          if (rightMods.length > 0) {
+            if (leftMods.length > 0) modText += " ";
+            modText += `[${secondName}: ${rightMods.join(", ")}]`;
+          }
+          parts.push(modText);
+        }
+      } else {
+        // Standardowa pizza
+        if (!pizza.modifications || Object.keys(pizza.modifications).length === 0) return;
+
+        const pizzaName = pizza.nazwa;
+        const mods: string[] = [];
+
+        Object.entries(pizza.modifications).forEach(([idStr, change]) => {
+          const id = parseInt(idStr);
+          const ingredient = skladniki?.find((s: any) => s.id === id);
+          if (!ingredient) return;
+
+          if (change < 0) {
+            mods.push(`-${ingredient.nazwa}`);
+          } else if (change > 0) {
+            const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+            const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === id);
+            
+            if (isBase) {
+              mods.push(`${change + 1}+${ingredient.nazwa}`);
             } else {
-              mods.push(`${change}+${ingredient.nazwa}`);
+              mods.push(change === 1 ? `+${ingredient.nazwa}` : `${change}+${ingredient.nazwa}`);
             }
           }
-        }
-      });
+        });
 
-      if (mods.length > 0) {
-        parts.push(`${pizzaName}: ${mods.join(", ")}`);
+        if (mods.length > 0) {
+          parts.push(`${pizzaName}: ${mods.join(", ")}`);
+        }
       }
     });
 
@@ -882,27 +1182,72 @@ export default function Home() {
       // Przygotuj obiekt modyfikacjeSkladnikow
       const modyfikacjeSkladnikow: Record<string, Record<string, number>> = {};
       orderData.pizze.forEach((pizza, index) => {
-        if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
-          const modsByName: Record<string, number> = {};
-          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
-          
-          Object.entries(pizza.modifications).forEach(([skladnikIdStr, change]) => {
-            const skladnikId = parseInt(skladnikIdStr);
-            const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
-            if (skladnik) {
-              const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
-              const baseCount = isBase ? 1 : 0;
-              const totalCount = baseCount + change;
-              
-              if (totalCount > 0) {
-                modsByName[skladnik.nazwa] = totalCount;
+        const modsByName: Record<string, number> = {};
+        
+        // Dla pizzy pół na pół - zbierz modyfikacje z obu połówek
+        if (pizza.polNaPol) {
+          // Lewa połowa (pierwsza pizza)
+          if (pizza.modificationsLeft && Object.keys(pizza.modificationsLeft).length > 0) {
+            const pizzaDefLeft = pizzas?.find((p: any) => p.id === pizza.id);
+            
+            Object.entries(pizza.modificationsLeft).forEach(([skladnikIdStr, change]) => {
+              const skladnikId = parseInt(skladnikIdStr);
+              const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
+              if (skladnik && change > 0) {
+                const isBase = pizzaDefLeft?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+                const baseCount = isBase ? 1 : 0;
+                const totalCount = baseCount + change;
+                
+                if (totalCount > 0) {
+                  // Dla pół na pół sumujemy obie połowy
+                  modsByName[skladnik.nazwa] = (modsByName[skladnik.nazwa] || 0) + totalCount;
+                }
               }
-            }
-          });
-          
-          if (Object.keys(modsByName).length > 0) {
-            modyfikacjeSkladnikow[index.toString()] = modsByName;
+            });
           }
+          
+          // Prawa połowa (druga pizza)
+          if (pizza.modificationsRight && Object.keys(pizza.modificationsRight).length > 0) {
+            const pizzaDefRight = pizzas?.find((p: any) => p.id === pizza.polNaPol.id);
+            
+            Object.entries(pizza.modificationsRight).forEach(([skladnikIdStr, change]) => {
+              const skladnikId = parseInt(skladnikIdStr);
+              const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
+              if (skladnik && change > 0) {
+                const isBase = pizzaDefRight?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+                const baseCount = isBase ? 1 : 0;
+                const totalCount = baseCount + change;
+                
+                if (totalCount > 0) {
+                  // Dla pół na pół sumujemy obie połowy
+                  modsByName[skladnik.nazwa] = (modsByName[skladnik.nazwa] || 0) + totalCount;
+                }
+              }
+            });
+          }
+        } else {
+          // Standardowa pizza (nie pół na pół)
+          if (pizza.modifications && Object.keys(pizza.modifications).length > 0) {
+            const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+            
+            Object.entries(pizza.modifications).forEach(([skladnikIdStr, change]) => {
+              const skladnikId = parseInt(skladnikIdStr);
+              const skladnik = skladniki?.find((s: any) => s.id === skladnikId);
+              if (skladnik) {
+                const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnikId);
+                const baseCount = isBase ? 1 : 0;
+                const totalCount = baseCount + change;
+                
+                if (totalCount > 0) {
+                  modsByName[skladnik.nazwa] = totalCount;
+                }
+              }
+            });
+          }
+        }
+        
+        if (Object.keys(modsByName).length > 0) {
+          modyfikacjeSkladnikow[index.toString()] = modsByName;
         }
       });
       
@@ -1364,7 +1709,7 @@ export default function Home() {
                               <button
                                 type="button"
                                 key={key}
-                                onClick={(e) => {
+                                onMouseDown={(e) => {
                                   e.preventDefault();
                                   if (activeInputRef?.current) {
                                     const input = activeInputRef.current;
@@ -1388,13 +1733,9 @@ export default function Home() {
                                         const newFormattedCursorPos = newCleanCursorPos + spacesBeforeCursor;
                                         input.setSelectionRange(newFormattedCursorPos, newFormattedCursorPos);
                                       });
-                                    } else if (input === numerDomuInputRef.current) {
+                                    } else if (input === deliveryPriceInputRef.current) {
                                       const newValue = input.value.substring(0, start) + key + input.value.substring(end);
-                                      setNumerDomu(newValue);
-                                      
-                                      requestAnimationFrame(() => {
-                                        input.setSelectionRange(start + 1, start + 1);
-                                      });
+                                      setCustomDeliveryPrice(parseInt(newValue) || 0);
                                     }
                                   }
                                 }}
@@ -1412,7 +1753,7 @@ export default function Home() {
                           {/* 0 button */}
                           <button
                             type="button"
-                            onClick={(e) => {
+                            onMouseDown={(e) => {
                               e.preventDefault();
                               if (activeInputRef?.current) {
                                 const input = activeInputRef.current;
@@ -1431,13 +1772,9 @@ export default function Home() {
                                     const newFormattedCursorPos = newCleanCursorPos + spacesBeforeCursor;
                                     input.setSelectionRange(newFormattedCursorPos, newFormattedCursorPos);
                                   });
-                                } else if (input === numerDomuInputRef.current) {
+                                } else if (input === deliveryPriceInputRef.current) {
                                   const newValue = input.value.substring(0, start) + '0' + input.value.substring(end);
-                                  setNumerDomu(newValue);
-                                  
-                                  requestAnimationFrame(() => {
-                                    input.setSelectionRange(start + 1, start + 1);
-                                  });
+                                  setCustomDeliveryPrice(parseInt(newValue) || 0);
                                 }
                               }
                             }}
@@ -1448,7 +1785,7 @@ export default function Home() {
                           {/* Del button */}
                           <button
                             type="button"
-                            onClick={(e) => {
+                            onMouseDown={(e) => {
                               e.preventDefault();
                               if (activeInputRef?.current) {
                                 const input = activeInputRef.current;
@@ -1467,13 +1804,13 @@ export default function Home() {
                                     const newFormattedCursorPos = newCleanCursorPos + spacesBeforeCursor;
                                     input.setSelectionRange(newFormattedCursorPos, newFormattedCursorPos);
                                   });
-                                } else if (input === numerDomuInputRef.current) {
+                                } else if (input === deliveryPriceInputRef.current) {
                                   const newValue = input.value.substring(0, Math.max(0, start - 1)) + input.value.substring(start);
-                                  setNumerDomu(newValue);
-                                  
-                                  requestAnimationFrame(() => {
-                                    input.setSelectionRange(Math.max(0, start - 1), Math.max(0, start - 1));
-                                  });
+                                  if (newValue === '') {
+                                    setCustomDeliveryPrice(null);
+                                  } else {
+                                    setCustomDeliveryPrice(parseInt(newValue) || 0);
+                                  }
                                 }
                               }
                             }}
@@ -1891,6 +2228,7 @@ export default function Home() {
                         <div className="flex items-center gap-2">
                           <label className="text-xs font-bold text-gray-700 uppercase">Cena dostawy:</label>
                           <input
+                            ref={deliveryPriceInputRef}
                             type="number"
                             step="1"
                             min="0"
@@ -1901,6 +2239,13 @@ export default function Home() {
                                 setCustomDeliveryPrice(null);
                               } else {
                                 setCustomDeliveryPrice(parseInt(value) || 0);
+                              }
+                            }}
+                            onFocus={() => {
+                              if (!showKeyboard || activeInputRef?.current !== deliveryPriceInputRef.current) {
+                                activeInputRef.current = deliveryPriceInputRef.current;
+                                setKeyboardType('numeric');
+                                setShowKeyboard(true);
                               }
                             }}
                             className="w-20 p-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
@@ -1938,40 +2283,65 @@ export default function Home() {
                 {orderData.pizze.map((pizza, index) => (
                   <Card key={index} className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
                     <CardContent className="pt-6">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-base mb-1">{pizza.nazwa}</h4>
-                          <div className="flex gap-2 flex-wrap">
-                            <Badge variant="secondary">{pizza.rozmiar}</Badge>
-                            <Badge variant="outline">{pizza.cena} PLN</Badge>
-                            {pizza.isKupony && <Badge>KUPONY</Badge>}
-                            {getModificationsList(pizza).map((mod, idx) => (
-                              <Badge key={idx} variant="default" className={mod.cena === null ? "bg-red-500" : "bg-orange-500"}>
-                                {mod.cena === null ? mod.nazwa : `${mod.nazwa} +${mod.cena.toFixed(2)} PLN`}
-                              </Badge>
-                            ))}
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-base mb-1">{pizza.nazwa}</h4>
+                            <div className="flex gap-2 flex-wrap">
+                              <Badge variant="secondary">{pizza.rozmiar}</Badge>
+                              <Badge variant="outline">{pizza.cena} PLN</Badge>
+                              {pizza.isKupony && <Badge>KUPONY</Badge>}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="default"
+                              className={`font-semibold flex-[4] text-white ${
+                                expandedPizzaIndex === index 
+                                  ? 'bg-gray-700 hover:bg-gray-600' 
+                                  : 'bg-orange-500 hover:bg-orange-600'
+                              }`}
+                              onClick={() => toggleIngredients(index)}
+                            >
+                              {expandedPizzaIndex === index ? 'Ukryj składniki' : 'Modyfikuj składniki'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="default"
+                              className="font-semibold flex-1"
+                              onClick={() => removePizza(index)}
+                            >
+                              Usuń
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="default"
-                            className="font-semibold"
-                            onClick={() => toggleIngredients(index)}
-                          >
-                            {expandedPizzaIndex === index ? "Ukryj" : "Edytuj składniki"}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="default"
-                            className="font-semibold"
-                            onClick={() => removePizza(index)}
-                          >
-                            Usuń
-                          </Button>
-                        </div>
+                        
+                        {/* Modyfikacje składników pod przyciskami */}
+                        {getModificationsList(pizza).length > 0 && (
+                          <div className="flex gap-2 flex-wrap">
+                            {getModificationsList(pizza).map((mod, idx) => {
+                              let bgClass = "bg-orange-500"; // domyślnie pomarańczowy
+                              if (mod.kolor === 'niebieski') {
+                                bgClass = "bg-blue-500";
+                              } else if (mod.kolor === 'czerwony') {
+                                bgClass = "bg-red-500";
+                              } else if (mod.kolor === 'pomarańczowy') {
+                                bgClass = "bg-orange-500";
+                              } else if (mod.cena === null) {
+                                bgClass = "bg-red-500"; // fallback dla usuniętych
+                              }
+                              
+                              return (
+                                <Badge key={idx} variant="default" className={bgClass}>
+                                  {mod.cena === null ? mod.nazwa : `${mod.nazwa} +${mod.cena.toFixed(2)} PLN`}
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                   
                   {/* Edytor składników */}
@@ -1984,61 +2354,155 @@ export default function Home() {
                         <div className="text-sm text-gray-500">Brak dostępnych składników.</div>
                       )}
                       
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {skladniki?.map((skladnik: any) => {
-                          // Sprawdź czy składnik jest w bazie pierwszej pizzy
-                          const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
-                          const isBaseInFirst = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id);
+                      {/* Jeśli to pizza pół na pół - pokaż oddzielne kontrolki dla każdej połowy */}
+                      {pizza.polNaPol ? (
+                        <div className="space-y-2">
+                          {/* Nagłówki połówek */}
+                          <div className="grid grid-cols-[1fr,auto,1fr] gap-2 text-center mb-2">
+                            <div className="text-blue-600 text-2xl font-extrabold">← {pizzas?.find((p: any) => p.id === pizza.id)?.nazwa}</div>
+                            <div className="text-gray-400 text-xs font-bold">Składnik</div>
+                            <div className="text-orange-600 text-2xl font-extrabold">{pizzas?.find((p: any) => p.id === pizza.polNaPol?.id)?.nazwa} →</div>
+                          </div>
                           
-                          // Sprawdź czy składnik jest w bazie drugiej pizzy (dla pół na pół)
-                          let isBaseInSecond = false;
-                          if (pizza.polNaPol) {
-                            const pizzaDef2 = pizzas?.find((p: any) => p.id === pizza.polNaPol?.id);
-                            isBaseInSecond = pizzaDef2?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id) || false;
-                          }
-                          
-                          // Składnik jest bazowy jeśli jest w którejkolwiek z pizz
-                          const isBase = isBaseInFirst || isBaseInSecond;
-                          const baseCount = isBase ? 1 : 0;
-                          const modification = pizza.modifications?.[skladnik.id] || 0;
-                          const currentCount = baseCount + modification;
-                          
-                          // Pokaż tylko jeśli jest w bazie LUB został dodany LUB (opcjonalnie: pokaż wszystkie)
-                          // Użytkownik chce listę checkboxów ze składnikami zawartymi w każdej pizzy...
-                          // Ale też chce dodawać inne. Więc pokazujemy wszystkie, ale wyróżniamy te bazowe.
-                          
-                          return (
-                            <div key={skladnik.id} className={`flex items-center justify-between p-2 rounded border ${
-                              currentCount > 0 ? 'bg-gray-700 border-gray-700 text-white' : 'bg-white border-gray-200'
-                            }`}>
-                              <span className="text-sm truncate mr-2" title={skladnik.nazwa}>
-                                {skladnik.nazwa}
-                              </span>
-                              <div className="flex items-center space-x-1">
-                                <button
-                                  type="button"
-                                  onClick={() => updateIngredient(index, skladnik.id, -1)}
-                                  disabled={currentCount <= 0}
-                                  className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-300 disabled:opacity-50 ${
-                                    currentCount > 0 ? 'bg-gray-500 text-white' : 'bg-gray-200'
-                                  }`}
-                                >
-                                  -
-                                </button>
-                                <span className={`w-4 text-center text-sm font-medium ${currentCount > 0 ? 'text-white' : ''}`}>{currentCount}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => updateIngredient(index, skladnik.id, 1)}
-                                  className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-300 ${
-                                    currentCount > 0 ? 'bg-gray-500 text-white' : 'bg-gray-200'
-                                  }`}
-                                >
-                                  +
-                                </button>
+                          {skladniki?.map((skladnik: any) => {
+                            // Sprawdź składniki w lewej połowie (pierwsza pizza)
+                            const pizzaDefLeft = pizzas?.find((p: any) => p.id === pizza.id);
+                            const isBaseLeft = pizzaDefLeft?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id);
+                            const baseCountLeft = isBaseLeft ? 1 : 0;
+                            const modificationLeft = pizza.modificationsLeft?.[skladnik.id] || 0;
+                            const currentCountLeft = baseCountLeft + modificationLeft;
+                            
+                            // Sprawdź składniki w prawej połowie (druga pizza)
+                            const pizzaDefRight = pizzas?.find((p: any) => p.id === pizza.polNaPol?.id);
+                            const isBaseRight = pizzaDefRight?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id);
+                            const baseCountRight = isBaseRight ? 1 : 0;
+                            const modificationRight = pizza.modificationsRight?.[skladnik.id] || 0;
+                            const currentCountRight = baseCountRight + modificationRight;
+                            
+                            const hasAny = currentCountLeft > 0 || currentCountRight > 0;
+                            
+                            return (
+                              <div key={skladnik.id} className={`grid grid-cols-[1fr,auto,1fr] gap-2 items-center p-2 rounded border ${
+                                hasAny ? 'bg-gray-700 border-gray-700' : 'bg-white border-gray-200'
+                              }`}>
+                                {/* Lewa połowa - pierwsza pizza */}
+                                <div className="flex items-center justify-end space-x-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateIngredientHalf(index, skladnik.id, -1, 'left')}
+                                    disabled={currentCountLeft <= 0}
+                                    className={`w-6 h-6 flex items-center justify-center rounded hover:bg-blue-400 disabled:opacity-30 ${
+                                      currentCountLeft > 0 ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                                    }`}
+                                  >
+                                    -
+                                  </button>
+                                  <span className={`w-4 text-center text-sm font-medium ${
+                                    currentCountLeft > 0 ? 'text-white' : 'text-gray-600'
+                                  }`}>{currentCountLeft}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateIngredientHalf(index, skladnik.id, 1, 'left')}
+                                    className={`w-6 h-6 flex items-center justify-center rounded hover:bg-blue-400 ${
+                                      currentCountLeft > 0 ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                                    }`}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                                
+                                {/* Środek - nazwa składnika */}
+                                <span className={`text-xs font-semibold text-center px-2 whitespace-nowrap ${
+                                  hasAny ? 'text-white' : 'text-gray-700'
+                                }`} title={skladnik.nazwa}>
+                                  {skladnik.nazwa}
+                                </span>
+                                
+                                {/* Prawa połowa - druga pizza */}
+                                <div className="flex items-center justify-start space-x-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateIngredientHalf(index, skladnik.id, -1, 'right')}
+                                    disabled={currentCountRight <= 0}
+                                    className={`w-6 h-6 flex items-center justify-center rounded hover:bg-orange-400 disabled:opacity-30 ${
+                                      currentCountRight > 0 ? 'bg-orange-500 text-white' : 'bg-gray-200'
+                                    }`}
+                                  >
+                                    -
+                                  </button>
+                                  <span className={`w-4 text-center text-sm font-medium ${
+                                    currentCountRight > 0 ? 'text-white' : 'text-gray-600'
+                                  }`}>{currentCountRight}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateIngredientHalf(index, skladnik.id, 1, 'right')}
+                                    className={`w-6 h-6 flex items-center justify-center rounded hover:bg-orange-400 ${
+                                      currentCountRight > 0 ? 'bg-orange-500 text-white' : 'bg-gray-200'
+                                    }`}
+                                  >
+                                    +
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        // Standardowy interfejs dla zwykłej pizzy
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {skladniki?.map((skladnik: any) => {
+                            const pizzaDef = pizzas?.find((p: any) => p.id === pizza.id);
+                            const isBase = pizzaDef?.skladniki?.some((s: any) => s.id_skladnik === skladnik.id);
+                            const baseCount = isBase ? 1 : 0;
+                            const modification = pizza.modifications?.[skladnik.id] || 0;
+                            const currentCount = baseCount + modification;
+                            
+                            return (
+                              <div key={skladnik.id} className={`flex items-center justify-between p-2 rounded border ${
+                                currentCount > 0 ? 'bg-gray-700 border-gray-700 text-white' : 'bg-white border-gray-200'
+                              }`}>
+                                <span className="text-sm truncate mr-2" title={skladnik.nazwa}>
+                                  {skladnik.nazwa}
+                                </span>
+                                <div className="flex items-center space-x-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateIngredient(index, skladnik.id, -1)}
+                                    disabled={currentCount <= 0}
+                                    className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-300 disabled:opacity-50 ${
+                                      currentCount > 0 ? 'bg-gray-500 text-white' : 'bg-gray-200'
+                                    }`}
+                                  >
+                                    -
+                                  </button>
+                                  <span className={`w-4 text-center text-sm font-medium ${currentCount > 0 ? 'text-white' : ''}`}>{currentCount}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateIngredient(index, skladnik.id, 1)}
+                                    className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-300 ${
+                                      currentCount > 0 ? 'bg-gray-500 text-white' : 'bg-gray-200'
+                                    }`}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      
+                      {/* Przycisk ukryj składniki */}
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="w-full bg-gray-700 hover:bg-gray-600 text-white"
+                          onClick={() => toggleIngredients(index)}
+                        >
+                          Ukryj składniki
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -2148,28 +2612,36 @@ export default function Home() {
                 </div>
 
                 <div className="mb-4">
-                  <div className="flex space-x-6">
-                    <label className="flex items-center">
+                  <div className="flex gap-3">
+                    <label 
+                      className={`flex-1 cursor-pointer transition-all ${
+                        isPolNaPol 
+                          ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white border-blue-600 shadow-lg scale-105' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:shadow-md'
+                      } border-2 rounded-lg px-4 py-3 text-center font-semibold text-base`}
+                    >
                       <input
                         type="checkbox"
                         checked={isPolNaPol}
                         onChange={(e) => setIsPolNaPol(e.target.checked)}
-                        className="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="hidden"
                       />
-                      <span className="text-sm font-semibold text-gray-800">
-                        Pół na pół (+4 PLN)
-                      </span>
+                      Pół na pół (+4 PLN)
                     </label>
-                    <label className="flex items-center">
+                    <label 
+                      className={`flex-1 cursor-pointer transition-all ${
+                        isKupony 
+                          ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white border-blue-600 shadow-lg scale-105' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:shadow-md'
+                      } border-2 rounded-lg px-4 py-3 text-center font-semibold text-base`}
+                    >
                       <input
                         type="checkbox"
                         checked={isKupony}
                         onChange={(e) => setIsKupony(e.target.checked)}
-                        className="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="hidden"
                       />
-                      <span className="text-sm font-semibold text-gray-800">
-                        KUPONY
-                      </span>
+                      KUPONY
                     </label>
                   </div>
                 </div>
@@ -2182,7 +2654,7 @@ export default function Home() {
                 )}
                 <div className="grid grid-cols-4 gap-3 mb-4">
                   {(isKupony ? pizzas?.slice(0, 13) : pizzas?.slice(0, 40))
-                    ?.map((pizza: any) => (
+                    ?.map((pizza: any, index: number) => (
                       <button
                         key={pizza.id}
                         type="button"
@@ -2191,7 +2663,7 @@ export default function Home() {
                           selectedPizzas.has(pizza.id) || firstPizzaId === pizza.id ? 'border-blue-500 bg-blue-50 shadow-md scale-105' : 'border-gray-300 bg-white'
                         }`}
                       >
-                        <div className="text-xs font-bold mb-1 text-gray-900">{pizza.nazwa}</div>
+                        <div className="text-xs font-bold mb-1 text-gray-900">{index + 1}. {pizza.nazwa}</div>
                         <div className="text-xs text-gray-600 font-semibold">
                           {isKupony ? (
                             currentPizzaSize === "srednia" ? "" : currentPizzaSize === "duza" ? "10 zł" : ""
@@ -2301,26 +2773,15 @@ export default function Home() {
                   {orderData.pozycjeExtraIds.map((extraId, index) => {
                     const wybranaExtra = pozycjeExtra?.find((e: any) => e.id === extraId);
                     return (
-                      <div key={index} className="flex gap-2 items-center">
-                        <select
-                          value={extraId}
-                          onChange={(e) => {
-                            const newPozycjeExtraIds = [...orderData.pozycjeExtraIds];
-                            newPozycjeExtraIds[index] = parseInt(e.target.value);
-                            setOrderData(prev => ({ ...prev, pozycjeExtraIds: newPozycjeExtraIds }));
-                          }}
-                          className="flex-1 h-10 px-3 border border-input rounded-md text-sm font-medium bg-background focus:ring-2 focus:ring-ring"
-                        >
-                          {pozycjeExtra?.map((extra: any) => (
-                            <option key={extra.id} value={extra.id}>
-                              {extra.nazwa} - {extra.cena} PLN
-                            </option>
-                          ))}
-                        </select>
+                      <div key={index} className="flex gap-2 items-center justify-between p-3 bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary/20 rounded-lg">
+                        <div className="flex-1">
+                          <span className="font-semibold text-base">{wybranaExtra?.nazwa}</span>
+                          <span className="ml-2 text-sm text-gray-600">{wybranaExtra?.cena} PLN</span>
+                        </div>
                         <Button
                           type="button"
                           variant="destructive"
-                          size="default"
+                          size="sm"
                           onClick={() => {
                             const newPozycjeExtraIds = orderData.pozycjeExtraIds.filter((_, i) => i !== index);
                             setOrderData(prev => ({ ...prev, pozycjeExtraIds: newPozycjeExtraIds }));
@@ -2332,20 +2793,34 @@ export default function Home() {
                       </div>
                     );
                   })}
+                  
+                  {showExtraSelector && (
+                    <div className="grid grid-cols-2 gap-2 p-3 border-2 rounded-lg bg-gray-50">
+                      {pozycjeExtra?.map((extra: any) => (
+                        <button
+                          key={extra.id}
+                          type="button"
+                          onClick={() => {
+                            setOrderData(prev => ({ 
+                              ...prev, 
+                              pozycjeExtraIds: [...prev.pozycjeExtraIds, extra.id] 
+                            }));
+                            setShowExtraSelector(false);
+                          }}
+                          className="p-3 rounded-lg border-2 bg-white border-gray-200 hover:border-primary hover:bg-primary/10 font-semibold text-sm transition-all"
+                        >
+                          <div>{extra.nazwa}</div>
+                          <div className="text-xs mt-1">{extra.cena} PLN</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  
                   <Button
                     type="button"
                     variant="outline"
                     size="default"
-                    onClick={() => {
-                      if (pozycjeExtra && pozycjeExtra.length > 0) {
-                        const przekladaniec = pozycjeExtra.find((e: any) => e.nazwa.toLowerCase().includes("przekladaniec") || e.nazwa.toLowerCase().includes("przekładaniec"));
-                        const defaultExtraId = przekladaniec ? przekladaniec.id : pozycjeExtra[0].id;
-                        setOrderData(prev => ({ 
-                          ...prev, 
-                          pozycjeExtraIds: [...prev.pozycjeExtraIds, defaultExtraId] 
-                        }));
-                      }
-                    }}
+                    onClick={() => setShowExtraSelector(true)}
                     className="w-full h-12 font-semibold text-base"
                   >
                     + Dodaj pozycję extra
@@ -2362,26 +2837,15 @@ export default function Home() {
                   {orderData.napojeIds.map((napojId, index) => {
                     const wybranyNapoj = napoje?.find((n: any) => n.id === napojId);
                     return (
-                      <div key={index} className="flex gap-2 items-center">
-                        <select
-                          value={napojId}
-                          onChange={(e) => {
-                            const newNapojeIds = [...orderData.napojeIds];
-                            newNapojeIds[index] = parseInt(e.target.value);
-                            setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
-                          }}
-                          className="flex-1 h-10 px-3 border border-input rounded-md text-sm font-medium bg-background focus:ring-2 focus:ring-ring"
-                        >
-                          {napoje?.map((napoj: any) => (
-                            <option key={napoj.id} value={napoj.id}>
-                              {napoj.nazwa} - {napoj.cena} PLN
-                            </option>
-                          ))}
-                        </select>
+                      <div key={index} className="flex gap-2 items-center justify-between p-3 bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary/20 rounded-lg">
+                        <div className="flex-1">
+                          <span className="font-semibold text-base">{wybranyNapoj?.nazwa}</span>
+                          <span className="ml-2 text-sm text-gray-600">{wybranyNapoj?.cena} PLN</span>
+                        </div>
                         <Button
                           type="button"
                           variant="destructive"
-                          size="default"
+                          size="sm"
                           onClick={() => {
                             const newNapojeIds = orderData.napojeIds.filter((_, i) => i !== index);
                             setOrderData(prev => ({ ...prev, napojeIds: newNapojeIds }));
@@ -2393,20 +2857,34 @@ export default function Home() {
                       </div>
                     );
                   })}
+                  
+                  {showNapojSelector && (
+                    <div className="grid grid-cols-2 gap-2 p-3 border-2 rounded-lg bg-gray-50">
+                      {napoje?.map((napoj: any) => (
+                        <button
+                          key={napoj.id}
+                          type="button"
+                          onClick={() => {
+                            setOrderData(prev => ({ 
+                              ...prev, 
+                              napojeIds: [...prev.napojeIds, napoj.id] 
+                            }));
+                            setShowNapojSelector(false);
+                          }}
+                          className="p-3 rounded-lg border-2 bg-white border-gray-200 hover:border-primary hover:bg-primary/10 font-semibold text-sm transition-all"
+                        >
+                          <div>{napoj.nazwa}</div>
+                          <div className="text-xs mt-1">{napoj.cena} PLN</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  
                   <Button
                     type="button"
                     variant="outline"
                     size="default"
-                    onClick={() => {
-                      if (napoje && napoje.length > 0) {
-                        const napoj085 = napoje.find((n: any) => n.nazwa.includes("0,85") || n.nazwa.includes("0.85") || (n.nazwa.includes("napoje") && n.cena === 10));
-                        const defaultNapojId = napoj085 ? napoj085.id : napoje[0].id;
-                        setOrderData(prev => ({ 
-                          ...prev, 
-                          napojeIds: [...prev.napojeIds, defaultNapojId] 
-                        }));
-                      }
-                    }}
+                    onClick={() => setShowNapojSelector(true)}
                     className="w-full h-12 font-semibold text-base"
                   >
                     + Dodaj napój

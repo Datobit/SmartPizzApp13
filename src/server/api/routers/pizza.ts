@@ -251,6 +251,7 @@ export const pizzaRouter = createTRPCRouter({
           }
           
           // Oblicz modyfikacje składników dla tej pizzy
+          let modyfikacjeCost = 0;
           if (input.modyfikacjeSkladnikow) {
             const pizzaKey = `${i}`;
             const modyfikacje = input.modyfikacjeSkladnikow[pizzaKey];
@@ -261,6 +262,28 @@ export const pizzaRouter = createTRPCRouter({
               pizzaData.skladniki.forEach((ps: any) => {
                 bazoweSkladniki[ps.skladnik.nazwa] = 1; // Domyślnie 1x składnik
               });
+              
+              // Jeśli to pizza pół na pół, dodaj również składniki z drugiej pizzy
+              if (pizza.polNaPol) {
+                const drugaPizzaData = await db.pizza.findUnique({
+                  where: { id: pizza.polNaPol.id },
+                  include: {
+                    skladniki: {
+                      include: {
+                        skladnik: true
+                      }
+                    }
+                  }
+                });
+                
+                drugaPizzaData?.skladniki.forEach((ps: any) => {
+                  // Jeśli składnik już jest w bazoweSkladniki, nie zmieniamy (bo jest na lewej połowie)
+                  // Jeśli nie ma go, dodajemy (bo jest tylko na prawej połowie)
+                  if (!bazoweSkladniki[ps.skladnik.nazwa]) {
+                    bazoweSkladniki[ps.skladnik.nazwa] = 1;
+                  }
+                });
+              }
               
               // Oblicz różnice
               for (const [skladnikNazwa, nowaIlosc] of Object.entries(modyfikacje)) {
@@ -279,7 +302,9 @@ export const pizzaRouter = createTRPCRouter({
                       ? skladnik.cena_srednia 
                       : skladnik.cena_duza;
                     
-                    pizzaPrice += roznica * cenaZaSkladnik;
+                    // Dla pizzy pół na pół składnik dodany do połowy kosztuje połowę ceny
+                    const finalPrice = pizza.polNaPol ? cenaZaSkladnik / 2 : cenaZaSkladnik;
+                    modyfikacjeCost += roznica * finalPrice;
                   }
                 }
               }
@@ -289,10 +314,10 @@ export const pizzaRouter = createTRPCRouter({
           // Jeśli to pizza pół na pół
           if (pizza.polNaPol) {
             if (kuponEligible) {
-              // Dla pizzy z kuponów: po prostu dodaj +4 PLN
-              pizzaPrice += 4;
+              // Dla pizzy z kuponów: bazowa cena + modyfikacje + dopłata 4 PLN za pół na pół
+              pizzaPrice = pizzaPrice + modyfikacjeCost + 4;
             } else {
-              // Dla pizzy normalnej: wyższa cena z dwóch pizz + 4 PLN
+              // Dla pizzy normalnej: wyższa cena z dwóch pizz + modyfikacje + 4 PLN
               const drugaPizzaData = await db.pizza.findUnique({
                 where: { id: pizza.polNaPol.id },
               });
@@ -311,18 +336,23 @@ export const pizzaRouter = createTRPCRouter({
                     break;
                 }
                 
-                // Cena pół na pół: wyższa cena + dopłata 4 PLN
-                pizzaPrice = Math.max(pizzaPrice, drugaCena) + 4;
+                // Cena pół na pół: wyższa cena + modyfikacje + dopłata 4 PLN
+                pizzaPrice = Math.max(pizzaPrice, drugaCena) + modyfikacjeCost + 4;
               }
             }
+          } else {
+            // Standardowa pizza - dodaj koszt modyfikacji
+            pizzaPrice += modyfikacjeCost;
           }
           
           totalPrice += pizzaPrice;
         }
       }
 
-      // Cena sosów (2 PLN za sztukę)
-      totalPrice += (input.sosy.pom + input.sosy.czos) * 2;
+      // Cena sosów - jeśli jakakolwiek pizza jest za kupony, to 3 PLN, w przeciwnym razie 2 PLN
+      const maKuponyPizza = input.pizze.some(p => p.isKupony);
+      const cenaSosu = maKuponyPizza ? 3 : 2;
+      totalPrice += (input.sosy.pom + input.sosy.czos) * cenaSosu;
 
       // Cena napojów
       console.log("Napoje IDs:", input.napojeIds);
@@ -468,6 +498,7 @@ export const pizzaRouter = createTRPCRouter({
             }
             
             // Oblicz modyfikacje składników dla tej pizzy
+            let modyfikacjeCost = 0;
             if (input.modyfikacjeSkladnikow) {
               const pizzaIndex = input.pizze.indexOf(pizza);
               const pizzaKey = `${pizzaIndex}`;
@@ -491,6 +522,28 @@ export const pizzaRouter = createTRPCRouter({
                   bazoweSkladniki[ps.skladnik.nazwa] = 1;
                 });
                 
+                // Jeśli to pizza pół na pół, dodaj również składniki z drugiej pizzy
+                if (pizza.polNaPol) {
+                  const drugaPizzaData = await tx.pizza.findUnique({
+                    where: { id: pizza.polNaPol.id },
+                    include: {
+                      skladniki: {
+                        include: {
+                          skladnik: true
+                        }
+                      }
+                    }
+                  });
+                  
+                  drugaPizzaData?.skladniki.forEach((ps: any) => {
+                    // Jeśli składnik już jest w bazoweSkladniki, nie zmieniamy
+                    // Jeśli nie ma go, dodajemy
+                    if (!bazoweSkladniki[ps.skladnik.nazwa]) {
+                      bazoweSkladniki[ps.skladnik.nazwa] = 1;
+                    }
+                  });
+                }
+                
                 // Oblicz różnice
                 for (const [skladnikNazwa, nowaIlosc] of Object.entries(modyfikacje)) {
                   const bazowaIlosc = bazoweSkladniki[skladnikNazwa] || 0;
@@ -506,7 +559,9 @@ export const pizzaRouter = createTRPCRouter({
                         ? skladnik.cena_srednia 
                         : skladnik.cena_duza;
                       
-                      pizzaPrice += roznica * cenaZaSkladnik;
+                      // Dla pizzy pół na pół składnik dodany do połowy kosztuje połowę ceny
+                      const finalPrice = pizza.polNaPol ? cenaZaSkladnik / 2 : cenaZaSkladnik;
+                      modyfikacjeCost += roznica * finalPrice;
                     }
                   }
                 }
@@ -516,10 +571,10 @@ export const pizzaRouter = createTRPCRouter({
             // Jeśli to pizza pół na pół
             if (pizza.polNaPol) {
               if (kuponEligible) {
-                // Dla pizzy z kuponów: po prostu dodaj +4 PLN
-                pizzaPrice += 4;
+                // Dla pizzy z kuponów: bazowa cena + modyfikacje + dopłata 4 PLN za pół na pół
+                pizzaPrice = pizzaPrice + modyfikacjeCost + 4;
               } else {
-                // Dla pizzy normalnej: wyższa cena z dwóch pizz + 4 PLN
+                // Dla pizzy normalnej: wyższa cena z dwóch pizz + modyfikacje + 4 PLN
                 const drugaPizzaData = await tx.pizza.findUnique({
                   where: { id: pizza.polNaPol.id },
                 });
@@ -538,18 +593,23 @@ export const pizzaRouter = createTRPCRouter({
                       break;
                   }
                   
-                  // Cena pół na pół: wyższa cena + dopłata 4 PLN
-                  pizzaPrice = Math.max(pizzaPrice, drugaCena) + 4;
+                  // Cena pół na pół: wyższa cena + modyfikacje + dopłata 4 PLN
+                  pizzaPrice = Math.max(pizzaPrice, drugaCena) + modyfikacjeCost + 4;
                 }
               }
+            } else {
+              // Standardowa pizza - dodaj koszt modyfikacji
+              pizzaPrice += modyfikacjeCost;
             }
             
             totalPrice += pizzaPrice;
           }
         }
 
-        // Cena sosów
-        totalPrice += (input.sosy.pom + input.sosy.czos) * 2;
+        // Cena sosów - jeśli jakakolwiek pizza jest za kupony, to 3 PLN, w przeciwnym razie 2 PLN
+        const maKuponyPizza = input.pizze.some(p => p.isKupony);
+        const cenaSosu = maKuponyPizza ? 3 : 2;
+        totalPrice += (input.sosy.pom + input.sosy.czos) * cenaSosu;
 
         // Cena napojów
         console.log("CreateOrder - Napoje IDs:", input.napojeIds);

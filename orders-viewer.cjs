@@ -105,12 +105,48 @@ const server = http.createServer(async (req, res) => {
           const kwotaZamowienia = currentOrder[0].cena_calkowita;
           const adresZamowienia = currentOrder[0].adres;
           
+          // === SPRAWDZANIE ZMIANY CENY ===
+          if (cena !== null && cena !== kwotaZamowienia) {
+            const aktualnaSesjaId = sesjaId !== null ? (sesjaId === -1 ? null : sesjaId) : staraSesjaId;
+            
+            // Jeśli jest przypisana sesja
+            if (aktualnaSesjaId) {
+              // Znajdź transakcję do aktualizacji
+              const [transakcjeDoZmiany] = await connection.execute(
+                `SELECT id FROM transakcje
+                 WHERE sesja_id = ? 
+                 AND typ = 'wplyw' 
+                 AND kwota = ? 
+                 AND opis LIKE ?
+                 ORDER BY data_utworzenia DESC 
+                 LIMIT 1`,
+                [aktualnaSesjaId, kwotaZamowienia, `%${adresZamowienia}%`]
+              );
+              
+              if (transakcjeDoZmiany.length > 0) {
+                // Zaktualizuj kwotę w istniejącej transakcji
+                await connection.execute(
+                  `UPDATE transakcje 
+                   SET kwota = ?
+                   WHERE id = ?`,
+                  [cena, transakcjeDoZmiany[0].id]
+                );
+                console.log(`Zaktualizowano kwotę z ${kwotaZamowienia} na ${cena} PLN dla transakcji ID ${transakcjeDoZmiany[0].id}`);
+              } else {
+                console.log(`Nie znaleziono transakcji do aktualizacji kwoty`);
+              }
+            }
+          }
+          
           // === SPRAWDZANIE ZMIANY KIEROWCY ===
           if (sesjaId !== null) {
             const nowaSesjaId = sesjaId === -1 ? null : sesjaId;
             
             // Jeśli sesja się zmienia
             if (staraSesjaId !== nowaSesjaId) {
+              // Użyj nowej ceny jeśli została zmieniona, inaczej użyj starej
+              const kwotaDoTransakcji = cena !== null ? cena : kwotaZamowienia;
+              
               // Usuń transakcję ze starej sesji (jeśli była)
               if (staraSesjaId) {
                 await connection.execute(
@@ -130,9 +166,9 @@ const server = http.createServer(async (req, res) => {
               if (nowaSesjaId) {
                 await connection.execute(
                   'INSERT INTO transakcje (sesja_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?)',
-                  [nowaSesjaId, 'wplyw', kwotaZamowienia, staraPlatnosc, `Zamówienie - ${adresZamowienia}`]
+                  [nowaSesjaId, 'wplyw', kwotaDoTransakcji, staraPlatnosc, `Zamówienie - ${adresZamowienia}`]
                 );
-                console.log(`Dodano transakcję do nowej sesji ${nowaSesjaId} (${staraPlatnosc})`);
+                console.log(`Dodano transakcję do nowej sesji ${nowaSesjaId} z kwotą ${kwotaDoTransakcji} PLN (${staraPlatnosc})`);
               }
             }
           }
@@ -770,7 +806,7 @@ const server = http.createServer(async (req, res) => {
       display: inline-block;
       padding: 6px 14px;
       border-radius: 8px;
-      font-size: 0.8em;
+      font-size: 1em;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -807,7 +843,7 @@ const server = http.createServer(async (req, res) => {
       font-weight: 700;
       color: #1f2937;
       display: inline-block;
-      min-width: 90px;
+      min-width: 180px;
     }
     
     .pizza-list {
@@ -826,7 +862,7 @@ const server = http.createServer(async (req, res) => {
     .pizza-name {
       font-weight: 700;
       color: #1f2937;
-      font-size: 1.15em;
+      font-size: 1.3em;
     }
     
     .pizza-size {
@@ -1022,16 +1058,35 @@ const server = http.createServer(async (req, res) => {
           try {
             const pizzeArray = JSON.parse(order.pizze);
             
-            // Parsuj modyfikacje z pola skladniki (format: "NAZWA_PIZZY: +skladnik1, -skladnik2")
+            // Parsuj modyfikacje z pola skladniki (format: "NAZWA_PIZZY: +skladnik1, -skladnik2" lub "[PIZZA1: mod] [PIZZA2: mod]")
             let modyfikacjeMap = {};
             if (order.skladniki && typeof order.skladniki === 'string' && order.skladniki.trim() !== '') {
-              const modLines = order.skladniki.split('\\n');
+              const modLines = order.skladniki.split(';');
               modLines.forEach(line => {
-                const match = line.match(/^(.+?):\s*(.+)$/);
-                if (match) {
-                  const pizzaNazwa = match[1].trim().toUpperCase();
-                  const mods = match[2].trim();
-                  modyfikacjeMap[pizzaNazwa] = mods;
+                line = line.trim();
+                
+                // Sprawdź czy to pizza pół na pół (format: "NAZWA / NAZWA (pół na pół): [PIZZA1: mods] [PIZZA2: mods]")
+                const polNaPolMatch = line.match(/^(.+?)\\s*\\/\\s*(.+?)\\s*\\(p[oó]ł\\s+na\\s+p[oó]ł\\):\\s*\\[(.+?):(.+?)\\]\\s*\\[(.+?):(.+?)\\]$/i);
+                if (polNaPolMatch) {
+                  const fullPizzaName = polNaPolMatch[1].trim() + ' / ' + polNaPolMatch[2].trim() + ' (pół na pół)';
+                  const pizza1Name = polNaPolMatch[3].trim();
+                  const pizza1Mods = polNaPolMatch[4].trim();
+                  const pizza2Name = polNaPolMatch[5].trim();
+                  const pizza2Mods = polNaPolMatch[6].trim();
+                  
+                  modyfikacjeMap[fullPizzaName.toUpperCase()] = {
+                    isPolNaPol: true,
+                    left: { name: pizza1Name, mods: pizza1Mods },
+                    right: { name: pizza2Name, mods: pizza2Mods }
+                  };
+                } else {
+                  // Standardowy format: "NAZWA_PIZZY: +skladnik1, -skladnik2"
+                  const match = line.match(/^(.+?):\s*(.+)$/);
+                  if (match) {
+                    const pizzaNazwa = match[1].trim().toUpperCase();
+                    const mods = match[2].trim();
+                    modyfikacjeMap[pizzaNazwa] = { isPolNaPol: false, mods: mods };
+                  }
                 }
               });
             }
@@ -1040,26 +1095,136 @@ const server = http.createServer(async (req, res) => {
               const pizzaData = pizzas.find(p => p.id === pizza.id);
               const pizzaName = pizzaData ? pizzaData.nazwa : 'Pizza ID:' + pizza.id;
               
+              // Sprawdź czy to pizza pół na pół
+              const isPolNaPol = pizza.polNaPol && pizza.polNaPol.id;
+              
+              if (isPolNaPol) {
+                // Pizza pół na pół - renderuj dwie połówki obok siebie
+                const pizza2Data = pizzas.find(p => p.id === pizza.polNaPol.id);
+                const pizza2Name = pizza2Data ? pizza2Data.nazwa : 'Pizza ID:' + pizza.polNaPol.id;
+                
+                // Pobierz składniki dla obu pizz
+                let skladniki1 = [];
+                let skladniki2 = [];
+                
+                if (pizzaData && allPizzaSkladnik.length > 0) {
+                  const ids1 = allPizzaSkladnik.filter(ps => ps.id_pizza === pizzaData.id).map(ps => ps.id_skladnik);
+                  skladniki1 = allSkladniki.filter(s => ids1.includes(s.id)).map(s => s.nazwa);
+                }
+                
+                if (pizza2Data && allPizzaSkladnik.length > 0) {
+                  const ids2 = allPizzaSkladnik.filter(ps => ps.id_pizza === pizza2Data.id).map(ps => ps.id_skladnik);
+                  skladniki2 = allSkladniki.filter(s => ids2.includes(s.id)).map(s => s.nazwa);
+                }
+                
+                const skladniki1Html = skladniki1.length > 0 ? '<div style="font-size: 1.3em; color: #6b7280; margin-top: 6px; line-height: 1.3;">' + skladniki1.join(', ') + '</div>' : '';
+                const skladniki2Html = skladniki2.length > 0 ? '<div style="font-size: 1.3em; color: #6b7280; margin-top: 6px; line-height: 1.3;">' + skladniki2.join(', ') + '</div>' : '';
+                
+                // Znajdź modyfikacje dla obu stron
+                let mods1Html = '';
+                let mods2Html = '';
+                
+                const pizzaNazwa1Upper = pizzaName.toUpperCase();
+                const pizzaNazwa2Upper = pizza2Name.toUpperCase();
+                
+                for (const key in modyfikacjeMap) {
+                  const mapEntry = modyfikacjeMap[key];
+                  if (mapEntry.isPolNaPol) {
+                    if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwa1Upper) {
+                      mods1Html = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + mapEntry.left.mods + '</div>';
+                    }
+                    if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwa2Upper) {
+                      mods2Html = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + mapEntry.right.mods + '</div>';
+                    }
+                  }
+                }
+                
+                return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05);">' +
+                  '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">' +
+                    '<div style="border-right: 2px solid #e5e7eb; padding-right: 12px;">' +
+                      '<div style="font-weight: 700; color: #1e40af; font-size: 1.3em; margin-bottom: 4px;">← ' + pizzaName + '</div>' +
+                      '<div style="color: #6b7280; font-size: 1em; font-weight: 600;">[' + pizza.rozmiar + ']</div>' +
+                      skladniki1Html +
+                      mods1Html +
+                    '</div>' +
+                    '<div style="padding-left: 12px;">' +
+                      '<div style="font-weight: 700; color: #c2410c; font-size: 1.3em; margin-bottom: 4px;">' + pizza2Name + ' →</div>' +
+                      '<div style="color: #6b7280; font-size: 1em; font-weight: 600;">[' + pizza.rozmiar + ']</div>' +
+                      skladniki2Html +
+                      mods2Html +
+                    '</div>' +
+                  '</div>' +
+                '</div>';
+              }
+              
+              // Zwykła pizza - stary kod
+              const pizzaData2 = pizzas.find(p => p.id === pizza.id);
+              const pizzaName2 = pizzaData2 ? pizzaData2.nazwa : 'Pizza ID:' + pizza.id;
+              
               // Pobierz składniki dla tej pizzy
               let skladnikiHtml = '';
-              if (pizzaData && allPizzaSkladnik.length > 0) {
+              if (pizzaData2 && allPizzaSkladnik.length > 0) {
                 const pizzaSkladnikiIds = allPizzaSkladnik
-                  .filter(ps => ps.id_pizza === pizzaData.id)
+                  .filter(ps => ps.id_pizza === pizzaData2.id)
                   .map(ps => ps.id_skladnik);
                 const pizzaSkladniki = allSkladniki
                   .filter(s => pizzaSkladnikiIds.includes(s.id))
                   .map(s => s.nazwa);
                 if (pizzaSkladniki.length > 0) {
-                  skladnikiHtml = '<div style="font-size: 0.85em; color: #6b7280; margin-top: 4px; line-height: 1.4;">' + pizzaSkladniki.join(', ') + '</div>';
+                  skladnikiHtml = '<div style="font-size: 1.3em; color: #6b7280; margin-top: 4px; line-height: 1.4;">' + pizzaSkladniki.join(', ') + '</div>';
                 }
               }
               
               // Sprawdź czy są modyfikacje dla tej pizzy
               let modyfikacjeHtml = '';
-              const pizzaNazwaUpper = pizzaName.toUpperCase();
+              const pizzaNazwaUpper = pizzaName2.toUpperCase();
               
-              if (modyfikacjeMap[pizzaNazwaUpper]) {
-                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>' + modyfikacjeMap[pizzaNazwaUpper] + '</div>';
+              // Najpierw sprawdź czy to zwykła pizza
+              let modsData = modyfikacjeMap[pizzaNazwaUpper];
+              
+              // Jeśli nie znaleziono, sprawdź czy ta pizza jest częścią pizzy pół na pół
+              if (!modsData) {
+                for (const key in modyfikacjeMap) {
+                  const mapEntry = modyfikacjeMap[key];
+                  if (mapEntry.isPolNaPol) {
+                    // Sprawdź czy nazwa pizzy pasuje do lewej lub prawej strony
+                    if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwaUpper) {
+                      modsData = { isPolNaPol: true, side: 'left', data: mapEntry.left, fullKey: key };
+                      break;
+                    }
+                    if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwaUpper) {
+                      modsData = { isPolNaPol: true, side: 'right', data: mapEntry.right, fullKey: key };
+                      break;
+                    }
+                  }
+                }
+              }
+              
+              if (modsData) {
+                if (modsData.isPolNaPol && modsData.side) {
+                  // Pizza pół na pół - pokaż tylko modyfikacje dla tej strony
+                  const bgColor = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+                  const textColor = 'white';
+                  const arrow = modsData.side === 'left' ? '← ' : ' →';
+                  modyfikacjeHtml = '<div style="background: ' + bgColor + '; color: ' + textColor + '; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 700; line-height: 1.5; box-shadow: 0 2px 6px rgba(0,0,0,0.2); max-width: 220px; word-wrap: break-word;">';
+                  modyfikacjeHtml += '<div style="font-size: 1.1em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">PÓŁ NA PÓŁ ' + arrow + ':</div>';
+                  modyfikacjeHtml += modsData.data.mods;
+                  modyfikacjeHtml += '</div>';
+                } else if (modsData.isPolNaPol) {
+                  // Pokazanie pełnej pizzy pół na pół (nie powinno się zdarzyć, ale dla bezpieczeństwa)
+                  modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 250px; word-wrap: break-word;">';
+                  // Nagłówek ZMIANY: usunięty
+                  if (modsData.left) {
+                    modyfikacjeHtml += '<div style="background: rgba(220, 38, 38, 0.3); padding: 4px 8px; border-radius: 4px; margin: 4px 0;"><span style="color: white;">← ' + modsData.left.name + ':</span> ' + modsData.left.mods + '</div>';
+                  }
+                  if (modsData.right) {
+                    modyfikacjeHtml += '<div style="background: rgba(220, 38, 38, 0.3); padding: 4px 8px; border-radius: 4px; margin: 4px 0;"><span style="color: white;">' + modsData.right.name + ' →:</span> ' + modsData.right.mods + '</div>';
+                  }
+                  modyfikacjeHtml += '</div>';
+                } else {
+                  // Zwykła pizza
+                  modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;">' + modsData.mods + '</div>';
+                }
               }
               
               // Obsługa dodanych składników z JSON (fallback)
@@ -1068,7 +1233,7 @@ const server = http.createServer(async (req, res) => {
                   const skladnik = allSkladniki.find(s => s.id === idSkladnik);
                   return skladnik ? skladnik.nazwa : 'ID:' + idSkladnik;
                 });
-                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>+ ' + dodaneNazwy.join(', ') + '</div>';
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;">+ ' + dodaneNazwy.join(', ') + '</div>';
               }
               
               // Obsługa usuniętych składników z JSON (fallback)
@@ -1077,10 +1242,10 @@ const server = http.createServer(async (req, res) => {
                   const skladnik = allSkladniki.find(s => s.id === idSkladnik);
                   return skladnik ? skladnik.nazwa : 'ID:' + idSkladnik;
                 });
-                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>- ' + usunietaNazwy.join(', ') + '</div>';
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;">- ' + usunietaNazwy.join(', ') + '</div>';
               }
               
-              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.15em;">' + pizzaName + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span></div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
+              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.3em;">' + pizzaName2 + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span></div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
             }).join('');
           } catch (e) {
             console.error('Blad parsowania pizze:', e);
@@ -1092,6 +1257,22 @@ const server = http.createServer(async (req, res) => {
         if (order.typ_zamowienia === 'dowoz') {
           addressHtml = '<div class="detail-row"><span class="detail-label">Telefon:</span> ' + (order.telefon || '-') + '</div>' +
                         '<div class="detail-row"><span class="detail-label">Adres:</span> ' + (order.adres || '-') + '</div>';
+        }
+        
+        // Informacja o sosach
+        let sosyHtml = '';
+        if (order.sosy) {
+          try {
+            const sosy = JSON.parse(order.sosy);
+            if (sosy.pom > 0 || sosy.czos > 0) {
+              const sosyItems = [];
+              if (sosy.pom > 0) sosyItems.push('Pomidorowy: ' + sosy.pom);
+              if (sosy.czos > 0) sosyItems.push('Czosnkowy: ' + sosy.czos);
+              sosyHtml = '<div class="detail-row" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 5px 7px; border-radius: 6px; margin: 4px 0; border-left: 3px solid #f59e0b; font-size: 1em;"><span class="detail-label" style="color: #92400e; font-weight: 700;">Sosy:</span> <span style="color: #78350f; font-weight: 600;">' + sosyItems.join(', ') + '</span></div>';
+            }
+          } catch (e) {
+            console.error('Błąd parsowania sosów:', e);
+          }
         }
         
         return '<div class="order-card">' +
@@ -1109,6 +1290,7 @@ const server = http.createServer(async (req, res) => {
             '<div class="order-details">' +
               addressHtml +
               '<div class="pizza-list">' + pizzaHtml + '</div>' +
+              sosyHtml +
               '<div class="detail-row"><span class="detail-label">Cena:</span> ' + order.cena_calkowita + ' PLN</div>' +
               '<div class="detail-row"><span class="detail-label">Platnosc:</span> ' + order.platnosc + '</div>' +
             '</div>' +
@@ -1426,7 +1608,7 @@ const server = http.createServer(async (req, res) => {
       color: #065f46;
       padding: 6px 12px;
       border-radius: 8px;
-      font-size: 0.85em;
+      font-size: 1em;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1437,7 +1619,7 @@ const server = http.createServer(async (req, res) => {
       display: inline-block;
       padding: 6px 14px;
       border-radius: 8px;
-      font-size: 0.8em;
+      font-size: 1em;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1474,7 +1656,7 @@ const server = http.createServer(async (req, res) => {
       font-weight: 700;
       color: #1f2937;
       display: inline-block;
-      min-width: 90px;
+      min-width: 180px;
     }
     
     .pizza-list {
@@ -1493,7 +1675,7 @@ const server = http.createServer(async (req, res) => {
     .pizza-name {
       font-weight: 700;
       color: #1f2937;
-      font-size: 1.15em;
+      font-size: 1.3em;
     }
     
     .pizza-size {
@@ -1674,16 +1856,35 @@ const server = http.createServer(async (req, res) => {
           try {
             const pizzeArray = JSON.parse(order.pizze);
             
-            // Parsuj modyfikacje z pola skladniki (format: "NAZWA_PIZZY: +skladnik1, -skladnik2")
+            // Parsuj modyfikacje z pola skladniki (format: "NAZWA_PIZZY: +skladnik1, -skladnik2" lub "[PIZZA1: mod] [PIZZA2: mod]")
             let modyfikacjeMap = {};
             if (order.skladniki && typeof order.skladniki === 'string' && order.skladniki.trim() !== '') {
-              const modLines = order.skladniki.split('\\n');
+              const modLines = order.skladniki.split(';');
               modLines.forEach(line => {
-                const match = line.match(/^(.+?):\s*(.+)$/);
-                if (match) {
-                  const pizzaNazwa = match[1].trim().toUpperCase();
-                  const mods = match[2].trim();
-                  modyfikacjeMap[pizzaNazwa] = mods;
+                line = line.trim();
+                
+                // Sprawdź czy to pizza pół na pół (format: "NAZWA / NAZWA (pół na pół): [PIZZA1: mods] [PIZZA2: mods]")
+                const polNaPolMatch = line.match(/^(.+?)\\s*\\/\\s*(.+?)\\s*\\(p[oó]ł\\s+na\\s+p[oó]ł\\):\\s*\\[(.+?):(.+?)\\]\\s*\\[(.+?):(.+?)\\]$/i);
+                if (polNaPolMatch) {
+                  const fullPizzaName = polNaPolMatch[1].trim() + ' / ' + polNaPolMatch[2].trim() + ' (pół na pół)';
+                  const pizza1Name = polNaPolMatch[3].trim();
+                  const pizza1Mods = polNaPolMatch[4].trim();
+                  const pizza2Name = polNaPolMatch[5].trim();
+                  const pizza2Mods = polNaPolMatch[6].trim();
+                  
+                  modyfikacjeMap[fullPizzaName.toUpperCase()] = {
+                    isPolNaPol: true,
+                    left: { name: pizza1Name, mods: pizza1Mods },
+                    right: { name: pizza2Name, mods: pizza2Mods }
+                  };
+                } else {
+                  // Standardowy format: "NAZWA_PIZZY: +skladnik1, -skladnik2"
+                  const match = line.match(/^(.+?):\s*(.+)$/);
+                  if (match) {
+                    const pizzaNazwa = match[1].trim().toUpperCase();
+                    const mods = match[2].trim();
+                    modyfikacjeMap[pizzaNazwa] = { isPolNaPol: false, mods: mods };
+                  }
                 }
               });
             }
@@ -1692,26 +1893,136 @@ const server = http.createServer(async (req, res) => {
               const pizzaData = pizzas.find(p => p.id === pizza.id);
               const pizzaName = pizzaData ? pizzaData.nazwa : 'Pizza ID:' + pizza.id;
               
+              // Sprawdź czy to pizza pół na pół
+              const isPolNaPol = pizza.polNaPol && pizza.polNaPol.id;
+              
+              if (isPolNaPol) {
+                // Pizza pół na pół - renderuj dwie połówki obok siebie
+                const pizza2Data = pizzas.find(p => p.id === pizza.polNaPol.id);
+                const pizza2Name = pizza2Data ? pizza2Data.nazwa : 'Pizza ID:' + pizza.polNaPol.id;
+                
+                // Pobierz składniki dla obu pizz
+                let skladniki1 = [];
+                let skladniki2 = [];
+                
+                if (pizzaData && allPizzaSkladnik.length > 0) {
+                  const ids1 = allPizzaSkladnik.filter(ps => ps.id_pizza === pizzaData.id).map(ps => ps.id_skladnik);
+                  skladniki1 = allSkladniki.filter(s => ids1.includes(s.id)).map(s => s.nazwa);
+                }
+                
+                if (pizza2Data && allPizzaSkladnik.length > 0) {
+                  const ids2 = allPizzaSkladnik.filter(ps => ps.id_pizza === pizza2Data.id).map(ps => ps.id_skladnik);
+                  skladniki2 = allSkladniki.filter(s => ids2.includes(s.id)).map(s => s.nazwa);
+                }
+                
+                const skladniki1Html = skladniki1.length > 0 ? '<div style="font-size: 1.3em; color: #6b7280; margin-top: 6px; line-height: 1.3;">' + skladniki1.join(', ') + '</div>' : '';
+                const skladniki2Html = skladniki2.length > 0 ? '<div style="font-size: 1.3em; color: #6b7280; margin-top: 6px; line-height: 1.3;">' + skladniki2.join(', ') + '</div>' : '';
+                
+                // Znajdź modyfikacje dla obu stron
+                let mods1Html = '';
+                let mods2Html = '';
+                
+                const pizzaNazwa1Upper = pizzaName.toUpperCase();
+                const pizzaNazwa2Upper = pizza2Name.toUpperCase();
+                
+                for (const key in modyfikacjeMap) {
+                  const mapEntry = modyfikacjeMap[key];
+                  if (mapEntry.isPolNaPol) {
+                    if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwa1Upper) {
+                      mods1Html = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + mapEntry.left.mods + '</div>';
+                    }
+                    if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwa2Upper) {
+                      mods2Html = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + mapEntry.right.mods + '</div>';
+                    }
+                  }
+                }
+                
+                return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05);">' +
+                  '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">' +
+                    '<div style="border-right: 2px solid #e5e7eb; padding-right: 12px;">' +
+                      '<div style="font-weight: 700; color: #1e40af; font-size: 1.3em; margin-bottom: 4px;">← ' + pizzaName + '</div>' +
+                      '<div style="color: #6b7280; font-size: 1em; font-weight: 600;">[' + pizza.rozmiar + ']</div>' +
+                      skladniki1Html +
+                      mods1Html +
+                    '</div>' +
+                    '<div style="padding-left: 12px;">' +
+                      '<div style="font-weight: 700; color: #c2410c; font-size: 1.3em; margin-bottom: 4px;">' + pizza2Name + ' →</div>' +
+                      '<div style="color: #6b7280; font-size: 1em; font-weight: 600;">[' + pizza.rozmiar + ']</div>' +
+                      skladniki2Html +
+                      mods2Html +
+                    '</div>' +
+                  '</div>' +
+                '</div>';
+              }
+              
+              // Zwykła pizza - stary kod
+              const pizzaData2 = pizzas.find(p => p.id === pizza.id);
+              const pizzaName2 = pizzaData2 ? pizzaData2.nazwa : 'Pizza ID:' + pizza.id;
+              
               // Pobierz składniki dla tej pizzy
               let skladnikiHtml = '';
-              if (pizzaData && allPizzaSkladnik.length > 0) {
+              if (pizzaData2 && allPizzaSkladnik.length > 0) {
                 const pizzaSkladnikiIds = allPizzaSkladnik
-                  .filter(ps => ps.id_pizza === pizzaData.id)
+                  .filter(ps => ps.id_pizza === pizzaData2.id)
                   .map(ps => ps.id_skladnik);
                 const pizzaSkladniki = allSkladniki
                   .filter(s => pizzaSkladnikiIds.includes(s.id))
                   .map(s => s.nazwa);
                 if (pizzaSkladniki.length > 0) {
-                  skladnikiHtml = '<div style="font-size: 0.85em; color: #6b7280; margin-top: 4px; line-height: 1.4;">' + pizzaSkladniki.join(', ') + '</div>';
+                  skladnikiHtml = '<div style="font-size: 1.3em; color: #6b7280; margin-top: 4px; line-height: 1.4;">' + pizzaSkladniki.join(', ') + '</div>';
                 }
               }
               
               // Sprawdź czy są modyfikacje dla tej pizzy
               let modyfikacjeHtml = '';
-              const pizzaNazwaUpper = pizzaName.toUpperCase();
+              const pizzaNazwaUpper = pizzaName2.toUpperCase();
               
-              if (modyfikacjeMap[pizzaNazwaUpper]) {
-                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>' + modyfikacjeMap[pizzaNazwaUpper] + '</div>';
+              // Najpierw sprawdź czy to zwykła pizza
+              let modsData = modyfikacjeMap[pizzaNazwaUpper];
+              
+              // Jeśli nie znaleziono, sprawdź czy ta pizza jest częścią pizzy pół na pół
+              if (!modsData) {
+                for (const key in modyfikacjeMap) {
+                  const mapEntry = modyfikacjeMap[key];
+                  if (mapEntry.isPolNaPol) {
+                    // Sprawdź czy nazwa pizzy pasuje do lewej lub prawej strony
+                    if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwaUpper) {
+                      modsData = { isPolNaPol: true, side: 'left', data: mapEntry.left, fullKey: key };
+                      break;
+                    }
+                    if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwaUpper) {
+                      modsData = { isPolNaPol: true, side: 'right', data: mapEntry.right, fullKey: key };
+                      break;
+                    }
+                  }
+                }
+              }
+              
+              if (modsData) {
+                if (modsData.isPolNaPol && modsData.side) {
+                  // Pizza pół na pół - pokaż tylko modyfikacje dla tej strony
+                  const bgColor = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+                  const textColor = 'white';
+                  const arrow = modsData.side === 'left' ? '← ' : ' →';
+                  modyfikacjeHtml = '<div style="background: ' + bgColor + '; color: ' + textColor + '; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 700; line-height: 1.5; box-shadow: 0 2px 6px rgba(0,0,0,0.2); max-width: 220px; word-wrap: break-word;">';
+                  modyfikacjeHtml += '<div style="font-size: 1.1em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">PÓŁ NA PÓŁ ' + arrow + ':</div>';
+                  modyfikacjeHtml += modsData.data.mods;
+                  modyfikacjeHtml += '</div>';
+                } else if (modsData.isPolNaPol) {
+                  // Pokazanie pełnej pizzy pół na pół (nie powinno się zdarzyć, ale dla bezpieczeństwa)
+                  modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 250px; word-wrap: break-word;">';
+                  // Nagłówek ZMIANY: usunięty
+                  if (modsData.left) {
+                    modyfikacjeHtml += '<div style="background: rgba(220, 38, 38, 0.3); padding: 4px 8px; border-radius: 4px; margin: 4px 0;"><span style="color: white;">← ' + modsData.left.name + ':</span> ' + modsData.left.mods + '</div>';
+                  }
+                  if (modsData.right) {
+                    modyfikacjeHtml += '<div style="background: rgba(220, 38, 38, 0.3); padding: 4px 8px; border-radius: 4px; margin: 4px 0;"><span style="color: white;">' + modsData.right.name + ' →:</span> ' + modsData.right.mods + '</div>';
+                  }
+                  modyfikacjeHtml += '</div>';
+                } else {
+                  // Zwykła pizza
+                  modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;">' + modsData.mods + '</div>';
+                }
               }
               
               // Obsługa dodanych składników z JSON (fallback)
@@ -1720,7 +2031,7 @@ const server = http.createServer(async (req, res) => {
                   const skladnik = allSkladniki.find(s => s.id === idSkladnik);
                   return skladnik ? skladnik.nazwa : 'ID:' + idSkladnik;
                 });
-                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>+ ' + dodaneNazwy.join(', ') + '</div>';
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;">+ ' + dodaneNazwy.join(', ') + '</div>';
               }
               
               // Obsługa usuniętych składników z JSON (fallback)
@@ -1729,10 +2040,10 @@ const server = http.createServer(async (req, res) => {
                   const skladnik = allSkladniki.find(s => s.id === idSkladnik);
                   return skladnik ? skladnik.nazwa : 'ID:' + idSkladnik;
                 });
-                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 0.8em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;"><div style="font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">ZMIANY:</div>- ' + usunietaNazwy.join(', ') + '</div>';
+                modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;">- ' + usunietaNazwy.join(', ') + '</div>';
               }
               
-              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.15em;">' + pizzaName + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span></div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
+              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.3em;">' + pizzaName2 + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span></div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
             }).join('');
           } catch (e) {
             console.error('Błąd parsowania pizze:', e);
@@ -1744,6 +2055,22 @@ const server = http.createServer(async (req, res) => {
         if (order.typ_zamowienia === 'dowoz') {
           addressHtml = '<div class="detail-row"><span class="detail-label">Telefon:</span> ' + (order.telefon || '-') + '</div>' +
                         '<div class="detail-row"><span class="detail-label">Adres:</span> ' + (order.adres || '-') + '</div>';
+        }
+        
+        // Informacja o sosach
+        let sosyHtml = '';
+        if (order.sosy) {
+          try {
+            const sosy = JSON.parse(order.sosy);
+            if (sosy.pom > 0 || sosy.czos > 0) {
+              const sosyItems = [];
+              if (sosy.pom > 0) sosyItems.push('Pomidorowy: ' + sosy.pom);
+              if (sosy.czos > 0) sosyItems.push('Czosnkowy: ' + sosy.czos);
+              sosyHtml = '<div class="detail-row" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 5px 7px; border-radius: 6px; margin: 4px 0; border-left: 3px solid #f59e0b; font-size: 1em;"><span class="detail-label" style="color: #92400e; font-weight: 700;">Sosy:</span> <span style="color: #78350f; font-weight: 600;">' + sosyItems.join(', ') + '</span></div>';
+            }
+          } catch (e) {
+            console.error('Błąd parsowania sosów:', e);
+          }
         }
         
         return '<div class="order-card">' +
@@ -1758,6 +2085,7 @@ const server = http.createServer(async (req, res) => {
           '<div class="order-details">' +
             addressHtml +
             '<div class="pizza-list">' + pizzaHtml + '</div>' +
+            sosyHtml +
             '<div class="detail-row"><span class="detail-label">Cena:</span> ' + order.cena_calkowita + ' PLN</div>' +
             '<div class="detail-row"><span class="detail-label">Płatność:</span> ' + order.platnosc + '</div>' +
           '</div>' +
