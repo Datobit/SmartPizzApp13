@@ -591,15 +591,14 @@ export default function Home() {
         const rozmiarKupon: "srednia" | "duza" = currentPizzaSize === "duza" ? "duza" : "srednia";
         cena = (rozmiarKupon === "srednia" ? 0 : 10) + 4;
       } else {
-        // Standardowa cena: max z obu pizz + 4 PLN
-        cena = Math.max(
-          currentPizzaSize === "mala" ? firstPizza.cena_mala : 
+        // Standardowa cena: połowa ceny pierwszej pizzy + połowa ceny drugiej pizzy + 4 PLN
+        const cenaFirstPizza = currentPizzaSize === "mala" ? firstPizza.cena_mala : 
           currentPizzaSize === "srednia" ? firstPizza.cena_srednia : 
-          firstPizza.cena_duza,
-          currentPizzaSize === "mala" ? pizza.cena_mala : 
+          firstPizza.cena_duza;
+        const cenaSecondPizza = currentPizzaSize === "mala" ? pizza.cena_mala : 
           currentPizzaSize === "srednia" ? pizza.cena_srednia : 
-          pizza.cena_duza
-        ) + 4;
+          pizza.cena_duza;
+        cena = (cenaFirstPizza / 2) + (cenaSecondPizza / 2) + 4;
       }
 
       const newPizza: PizzaSelection = {
@@ -623,7 +622,7 @@ export default function Home() {
       setFirstPizzaId(null);
       setIsPolNaPol(false);
       setSelectedPizzas(new Set());
-      setCurrentPizzaSize(isKupony ? "srednia" : "mala");
+      setCurrentPizzaSize("duza");
       setShowAddPizza(false);
       return;
     }
@@ -658,7 +657,7 @@ export default function Home() {
         pizze: [...prev.pizze, newPizza],
       }));
       setSelectedPizzas(new Set());
-      setCurrentPizzaSize("srednia");
+      setCurrentPizzaSize("duza");
       setShowAddPizza(false);
       return;
     }
@@ -1331,7 +1330,7 @@ export default function Home() {
                   handleNavigation("http://localhost:3006");
                 }}
               >
-                Orders Viewer
+                POZ
               </Button>
               <Button
                 variant="secondary"
@@ -1406,6 +1405,7 @@ export default function Home() {
                       id="telefon"
                       ref={telefonInputRef}
                       type="tel"
+                      autoComplete="off"
                       className="h-12 text-base"
                       value={orderData.telefon.replace(/(\d{3})(?=\d)/g, '$1 ')}
                       onChange={(e) => {

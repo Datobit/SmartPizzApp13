@@ -978,11 +978,11 @@ const server = http.createServer(async (req, res) => {
       <p class="subtitle">System Organizacji Zamowien</p>
     </div>
     <div style="display: flex; gap: 12px; align-items: center;">
-      <a href="http://localhost:3006" class="refresh-btn" style="text-decoration: none;">
-        Orders Viewer
-      </a>
       <a href="http://localhost:3000" class="refresh-btn" style="text-decoration: none;">
         Formularz Zamowienia
+      </a>
+      <a href="http://localhost:3006" class="refresh-btn" style="text-decoration: none;">
+        POZ
       </a>
       <a href="/kuchnia/historia" class="refresh-btn" style="text-decoration: none;">
         Historia
@@ -1054,75 +1054,159 @@ const server = http.createServer(async (req, res) => {
         const currentStatus = order.status_kuchnia || 'do_przygotowania';
         
         let pizzaHtml = '';
-        if (order.pizze) {
+        let extrasHtml = '';
+        let drinkHtml = '';
+        let sosyHtml = '';
+        
+        if (order.pizze && order.pizze.length > 0) {
           try {
             const pizzeArray = JSON.parse(order.pizze);
+            console.log('[ORDER #' + order.id + '] pizzeArray:', pizzeArray.length, 'pizz');
+            const allSkladniki = pizzas.flatMap(p => p.skladniki || []);
+            const allPizzaSkladnik = pizzas.flatMap(p => p.pizza_skladnik || []);
+          
+          // Nowa część: parsowanie składników i modyfikacji
+          let modyfikacjeMap = {};
+          
+          console.log('[ORDER #' + order.id + '] Sprawdzanie skladniki:', order.skladniki);
+          
+          if (order.skladniki) {
+            const linie = order.skladniki.split(';').map(l => l.trim()).filter(l => l);
             
-            // Parsuj modyfikacje z pola skladniki (format: "NAZWA_PIZZY: +skladnik1, -skladnik2" lub "[PIZZA1: mod] [PIZZA2: mod]")
-            let modyfikacjeMap = {};
-            if (order.skladniki && typeof order.skladniki === 'string' && order.skladniki.trim() !== '') {
-              const modLines = order.skladniki.split(';');
-              modLines.forEach(line => {
-                line = line.trim();
+            console.log('[ORDER #' + order.id + '] Podzielone linie:', linie);
+            
+            linie.forEach(line => {
+              console.log('[ORDER #' + order.id + '] Parsowanie linii:', line);
+              
+              // Format 1: NAZWA1 / NAZWA2 (pół na pół): [PIZZA1: mods] lub [PIZZA1: mods] [PIZZA2: mods]
+              const mixedPolNaPolMatch = line.match(/^(.+?)\\s*\\/\\s*(.+?)\\s*\\(p[oó]ł\\s+na\\s+p[oó]ł\\):\\s*(.+)$/i);
+              if (mixedPolNaPolMatch) {
+                console.log('[ORDER #' + order.id + '] Znaleziono mixed pol na pol format');
+                const pizza1Nazwa = mixedPolNaPolMatch[1].trim().toUpperCase();
+                const pizza2Nazwa = mixedPolNaPolMatch[2].trim().toUpperCase();
+                const modsString = mixedPolNaPolMatch[3].trim();
                 
-                // Sprawdź czy to pizza pół na pół (format: "NAZWA / NAZWA (pół na pół): [PIZZA1: mods] [PIZZA2: mods]")
-                const polNaPolMatch = line.match(/^(.+?)\\s*\\/\\s*(.+?)\\s*\\(p[oó]ł\\s+na\\s+p[oó]ł\\):\\s*\\[(.+?):(.+?)\\]\\s*\\[(.+?):(.+?)\\]$/i);
-                if (polNaPolMatch) {
-                  const fullPizzaName = polNaPolMatch[1].trim() + ' / ' + polNaPolMatch[2].trim() + ' (pół na pół)';
-                  const pizza1Name = polNaPolMatch[3].trim();
-                  const pizza1Mods = polNaPolMatch[4].trim();
-                  const pizza2Name = polNaPolMatch[5].trim();
-                  const pizza2Mods = polNaPolMatch[6].trim();
+                // Parsuj modyfikacje w nawiasach kwadratowych
+                const bracketsMatch = modsString.match(/\\[(.+?):\\s*(.+?)\\](?:\\s*\\[(.+?):\\s*(.+?)\\])?/);
+                if (bracketsMatch) {
+                  const pizza1 = bracketsMatch[1].trim().toUpperCase();
+                  const mods1 = bracketsMatch[2].trim();
                   
-                  modyfikacjeMap[fullPizzaName.toUpperCase()] = {
-                    isPolNaPol: true,
-                    left: { name: pizza1Name, mods: pizza1Mods },
-                    right: { name: pizza2Name, mods: pizza2Mods }
-                  };
-                } else {
-                  // Standardowy format: "NAZWA_PIZZY: +skladnik1, -skladnik2"
-                  const match = line.match(/^(.+?):\s*(.+)$/);
-                  if (match) {
-                    const pizzaNazwa = match[1].trim().toUpperCase();
-                    const mods = match[2].trim();
-                    modyfikacjeMap[pizzaNazwa] = { isPolNaPol: false, mods: mods };
+                  const key = pizza1Nazwa + ' / ' + pizza2Nazwa;
+                  if (!modyfikacjeMap[key]) {
+                    modyfikacjeMap[key] = { isPolNaPol: true, left: null, right: null };
                   }
+                  modyfikacjeMap[key].left = { name: pizza1, mods: mods1 };
+                  
+                  if (bracketsMatch[3] && bracketsMatch[4]) {
+                    const pizza2 = bracketsMatch[3].trim().toUpperCase();
+                    const mods2 = bracketsMatch[4].trim();
+                    modyfikacjeMap[key].right = { name: pizza2, mods: mods2 };
+                  }
+                  console.log('[ORDER #' + order.id + '] Mixed format parsed: key=' + key + ', left=' + pizza1 + ', right=' + (bracketsMatch[3] || 'null'));
+                  return;
                 }
-              });
-            }
-            
-            pizzaHtml = pizzeArray.map((pizza, idx) => {
-              const pizzaData = pizzas.find(p => p.id === pizza.id);
-              const pizzaName = pizzaData ? pizzaData.nazwa : 'Pizza ID:' + pizza.id;
+              }
+              
+              // Format 2: NAZWA1 / NAZWA2: [PIZZA1: mods] lub [PIZZA1: mods] [PIZZA2: mods]
+              const polNaPolMatch = line.match(/^(.+?)\\s*\\/\\s*(.+?):\\s*(.+)$/i);
+              if (polNaPolMatch) {
+                console.log('[ORDER #' + order.id + '] Znaleziono pol na pol format (stary)');
+                const pizza1Nazwa = polNaPolMatch[1].trim().toUpperCase();
+                const pizza2Nazwa = polNaPolMatch[2].trim().toUpperCase();
+                const modsString = polNaPolMatch[3].trim();
+                
+                // Sprawdź czy modyfikacje są w nowym formacie z nawiasami kwadratowymi
+                const bracketsMatch = modsString.match(/\\[(.+?):\\s*(.+?)\\](?:\\s*\\[(.+?):\\s*(.+?)\\])?/);
+                if (bracketsMatch) {
+                  const pizza1 = bracketsMatch[1].trim().toUpperCase();
+                  const mods1 = bracketsMatch[2].trim();
+                  
+                  const key = pizza1Nazwa + ' / ' + pizza2Nazwa;
+                  if (!modyfikacjeMap[key]) {
+                    modyfikacjeMap[key] = { isPolNaPol: true, left: null, right: null };
+                  }
+                  modyfikacjeMap[key].left = { name: pizza1, mods: mods1 };
+                  
+                  if (bracketsMatch[3] && bracketsMatch[4]) {
+                    const pizza2 = bracketsMatch[3].trim().toUpperCase();
+                    const mods2 = bracketsMatch[4].trim();
+                    modyfikacjeMap[key].right = { name: pizza2, mods: mods2 };
+                  }
+                  console.log('[ORDER #' + order.id + '] Pol na pol (nowy format) parsed: key=' + key);
+                } else {
+                  // Stary format bez nawiasów - wszystkie modyfikacje dla pierwszej pizzy
+                  const key = pizza1Nazwa + ' / ' + pizza2Nazwa;
+                  if (!modyfikacjeMap[key]) {
+                    modyfikacjeMap[key] = { isPolNaPol: true, left: null, right: null };
+                  }
+                  modyfikacjeMap[key].left = { name: pizza1Nazwa, mods: modsString };
+                  console.log('[ORDER #' + order.id + '] Pol na pol (stary format) parsed: key=' + key);
+                }
+                return;
+              }
+              
+              // Format 3: NAZWA: [PIZZA1: mods] lub [PIZZA1: mods] [PIZZA2: mods]
+              const polNaPolFullMatch = line.match(/^(.+?):\\s*\\[(.+?):\\s*(.+?)\\](?:\\s*\\[(.+?):\\s*(.+?)\\])?$/i);
+              if (polNaPolFullMatch) {
+                console.log('[ORDER #' + order.id + '] Znaleziono pol na pol full format');
+                const fullNazwa = polNaPolFullMatch[1].trim();
+                const pizza1 = polNaPolFullMatch[2].trim().toUpperCase();
+                const mods1 = polNaPolFullMatch[3].trim();
+                
+                if (!modyfikacjeMap[fullNazwa]) {
+                  modyfikacjeMap[fullNazwa] = { isPolNaPol: true, left: null, right: null };
+                }
+                modyfikacjeMap[fullNazwa].left = { name: pizza1, mods: mods1 };
+                
+                if (polNaPolFullMatch[4] && polNaPolFullMatch[5]) {
+                  const pizza2 = polNaPolFullMatch[4].trim().toUpperCase();
+                  const mods2 = polNaPolFullMatch[5].trim();
+                  modyfikacjeMap[fullNazwa].right = { name: pizza2, mods: mods2 };
+                }
+                console.log('[ORDER #' + order.id + '] Pol na pol full parsed: key=' + fullNazwa);
+                return;
+              }
+              
+              // Format 4: NAZWA: modyfikacje (format standardowy)
+              const match = line.match(/^(.+?):\\s*(.+)$/);
+              if (match) {
+                const pizzaNazwa = match[1].trim().toUpperCase();
+                const mods = match[2].trim();
+                console.log('[ORDER #' + order.id + '] Standardowy format: pizza=' + pizzaNazwa + ', mods=' + mods);
+                // Użyj tablicy dla pizz o tej samej nazwie
+                if (!modyfikacjeMap[pizzaNazwa]) {
+                  modyfikacjeMap[pizzaNazwa] = [];
+                }
+                modyfikacjeMap[pizzaNazwa].push({ isPolNaPol: false, mods: mods });
+              }
+            });
+          }
+          
+          console.log('[ORDER #' + order.id + '] modyfikacjeMap:', JSON.stringify(modyfikacjeMap));
+          
+          // Liczniki dla pizz o tej samej nazwie (aby obsłużyć wiele pizz tego samego typu)
+          const pizzaCounters = {};
+          // Śledzenie użytych modyfikacji pizz pół na pół (aby nie przypisywać ich do zwykłych pizz)
+          const usedPolNaPolMods = new Set();
+          
+          pizzaHtml = pizzeArray.map((pizza, idx) => {
+            const pizzaData = pizzas.find(p => p.id === pizza.id);
+            const pizzaName = pizzaData ? pizzaData.nazwa : 'Pizza ID:' + pizza.id;
               
               // Sprawdź czy to pizza pół na pół
               const isPolNaPol = pizza.polNaPol && pizza.polNaPol.id;
               
               if (isPolNaPol) {
-                // Pizza pół na pół - renderuj dwie połówki obok siebie
+                // Pizza pół na pół - renderuj jako jedną pizzę
                 const pizza2Data = pizzas.find(p => p.id === pizza.polNaPol.id);
                 const pizza2Name = pizza2Data ? pizza2Data.nazwa : 'Pizza ID:' + pizza.polNaPol.id;
                 
-                // Pobierz składniki dla obu pizz
-                let skladniki1 = [];
-                let skladniki2 = [];
-                
-                if (pizzaData && allPizzaSkladnik.length > 0) {
-                  const ids1 = allPizzaSkladnik.filter(ps => ps.id_pizza === pizzaData.id).map(ps => ps.id_skladnik);
-                  skladniki1 = allSkladniki.filter(s => ids1.includes(s.id)).map(s => s.nazwa);
-                }
-                
-                if (pizza2Data && allPizzaSkladnik.length > 0) {
-                  const ids2 = allPizzaSkladnik.filter(ps => ps.id_pizza === pizza2Data.id).map(ps => ps.id_skladnik);
-                  skladniki2 = allSkladniki.filter(s => ids2.includes(s.id)).map(s => s.nazwa);
-                }
-                
-                const skladniki1Html = skladniki1.length > 0 ? '<div style="font-size: 1.3em; color: #6b7280; margin-top: 6px; line-height: 1.3;">' + skladniki1.join(', ') + '</div>' : '';
-                const skladniki2Html = skladniki2.length > 0 ? '<div style="font-size: 1.3em; color: #6b7280; margin-top: 6px; line-height: 1.3;">' + skladniki2.join(', ') + '</div>' : '';
+                // Nazwa pizzy pół na pół
+                const polNaPolName = pizzaName + ' / ' + pizza2Name + ' (pół na pół)';
                 
                 // Znajdź modyfikacje dla obu stron
-                let mods1Html = '';
-                let mods2Html = '';
+                let modsArray = [];
                 
                 const pizzaNazwa1Upper = pizzaName.toUpperCase();
                 const pizzaNazwa2Upper = pizza2Name.toUpperCase();
@@ -1131,29 +1215,25 @@ const server = http.createServer(async (req, res) => {
                   const mapEntry = modyfikacjeMap[key];
                   if (mapEntry.isPolNaPol) {
                     if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwa1Upper) {
-                      mods1Html = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + mapEntry.left.mods + '</div>';
+                      modsArray.push(pizzaName.toUpperCase() + ': ' + mapEntry.left.mods);
+                      // Oznacz tę modyfikację jako użytą
+                      usedPolNaPolMods.add(key + '_left');
                     }
                     if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwa2Upper) {
-                      mods2Html = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + mapEntry.right.mods + '</div>';
+                      modsArray.push(pizza2Name.toUpperCase() + ': ' + mapEntry.right.mods);
+                      // Oznacz tę modyfikację jako użytą
+                      usedPolNaPolMods.add(key + '_right');
                     }
                   }
                 }
                 
+                const modsHtml = modsArray.length > 0 
+                  ? '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + modsArray.join('; ') + '</div>'
+                  : '';
+                
                 return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05);">' +
-                  '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">' +
-                    '<div style="border-right: 2px solid #e5e7eb; padding-right: 12px;">' +
-                      '<div style="font-weight: 700; color: #1e40af; font-size: 1.3em; margin-bottom: 4px;">← ' + pizzaName + '</div>' +
-                      '<div style="color: #6b7280; font-size: 1em; font-weight: 600;">[' + pizza.rozmiar + ']</div>' +
-                      skladniki1Html +
-                      mods1Html +
-                    '</div>' +
-                    '<div style="padding-left: 12px;">' +
-                      '<div style="font-weight: 700; color: #c2410c; font-size: 1.3em; margin-bottom: 4px;">' + pizza2Name + ' →</div>' +
-                      '<div style="color: #6b7280; font-size: 1em; font-weight: 600;">[' + pizza.rozmiar + ']</div>' +
-                      skladniki2Html +
-                      mods2Html +
-                    '</div>' +
-                  '</div>' +
+                  '<div style="font-weight: 700; color: hsl(25 95% 53%); font-size: 1.4em; margin-bottom: 4px;">' + polNaPolName + ' - ' + pizza.rozmiar + '</div>' +
+                  modsHtml +
                 '</div>';
               }
               
@@ -1179,20 +1259,30 @@ const server = http.createServer(async (req, res) => {
               let modyfikacjeHtml = '';
               const pizzaNazwaUpper = pizzaName2.toUpperCase();
               
-              // Najpierw sprawdź czy to zwykła pizza
-              let modsData = modyfikacjeMap[pizzaNazwaUpper];
+              // Inicjalizuj licznik dla tej nazwy pizzy jeśli jeszcze nie istnieje
+              if (!pizzaCounters[pizzaNazwaUpper]) {
+                pizzaCounters[pizzaNazwaUpper] = 0;
+              }
+              
+              // Najpierw sprawdź czy to zwykła pizza - użyj licznika dla pizz o tej samej nazwie
+              let modsData = null;
+              const modsArray = modyfikacjeMap[pizzaNazwaUpper];
+              if (Array.isArray(modsArray) && modsArray.length > pizzaCounters[pizzaNazwaUpper]) {
+                modsData = modsArray[pizzaCounters[pizzaNazwaUpper]];
+                pizzaCounters[pizzaNazwaUpper]++;
+              }
               
               // Jeśli nie znaleziono, sprawdź czy ta pizza jest częścią pizzy pół na pół
               if (!modsData) {
                 for (const key in modyfikacjeMap) {
                   const mapEntry = modyfikacjeMap[key];
-                  if (mapEntry.isPolNaPol) {
+                  if (mapEntry && mapEntry.isPolNaPol) {
                     // Sprawdź czy nazwa pizzy pasuje do lewej lub prawej strony
-                    if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwaUpper) {
+                    if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwaUpper && !usedPolNaPolMods.has(key + '_left')) {
                       modsData = { isPolNaPol: true, side: 'left', data: mapEntry.left, fullKey: key };
                       break;
                     }
-                    if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwaUpper) {
+                    if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwaUpper && !usedPolNaPolMods.has(key + '_right')) {
                       modsData = { isPolNaPol: true, side: 'right', data: mapEntry.right, fullKey: key };
                       break;
                     }
@@ -1260,7 +1350,6 @@ const server = http.createServer(async (req, res) => {
         }
         
         // Informacja o sosach
-        let sosyHtml = '';
         if (order.sosy) {
           try {
             const sosy = JSON.parse(order.sosy);
@@ -1863,31 +1952,77 @@ const server = http.createServer(async (req, res) => {
               modLines.forEach(line => {
                 line = line.trim();
                 
-                // Sprawdź czy to pizza pół na pół (format: "NAZWA / NAZWA (pół na pół): [PIZZA1: mods] [PIZZA2: mods]")
-                const polNaPolMatch = line.match(/^(.+?)\\s*\\/\\s*(.+?)\\s*\\(p[oó]ł\\s+na\\s+p[oó]ł\\):\\s*\\[(.+?):(.+?)\\]\\s*\\[(.+?):(.+?)\\]$/i);
-                if (polNaPolMatch) {
-                  const fullPizzaName = polNaPolMatch[1].trim() + ' / ' + polNaPolMatch[2].trim() + ' (pół na pół)';
-                  const pizza1Name = polNaPolMatch[3].trim();
-                  const pizza1Mods = polNaPolMatch[4].trim();
-                  const pizza2Name = polNaPolMatch[5].trim();
-                  const pizza2Mods = polNaPolMatch[6].trim();
+                // FORMAT MIESZANY: "NAZWA1 / NAZWA2 (pół na pół): [PIZZA: mods]" lub "[PIZZA1: mods] [PIZZA2: mods]"
+                // Użyj . zamiast dokładnych polskich znaków (pół = p + 2 dowolne znaki)
+                const mixedPolNaPolMatch = line.match(/^(.+?)\\s*\\/\\s*(.+?)\\s*\\(p..\\s+na\\s+p..\\):\\s*(.+)$/i);
+                if (mixedPolNaPolMatch) {
+                  const pizza1Name = mixedPolNaPolMatch[1].trim();
+                  const pizza2Name = mixedPolNaPolMatch[2].trim();
+                  const modsString = mixedPolNaPolMatch[3].trim();
+                  const fullPizzaName = pizza1Name + ' / ' + pizza2Name;
                   
-                  modyfikacjeMap[fullPizzaName.toUpperCase()] = {
-                    isPolNaPol: true,
-                    left: { name: pizza1Name, mods: pizza1Mods },
-                    right: { name: pizza2Name, mods: pizza2Mods }
-                  };
+                  // Sprawdź czy są nawiasy kwadratowe w modyfikacjach
+                  const bracketsMatch = modsString.match(/\\[(.+?):\\s*(.+?)\\](?:\\s*\\[(.+?):\\s*(.+?)\\])?/);
+                  if (bracketsMatch) {
+                    // Format z nawiasami: [PIZZA1: mods] lub [PIZZA1: mods] [PIZZA2: mods]
+                    const modPizzaName1 = bracketsMatch[1].trim();
+                    const mod1Text = bracketsMatch[2].trim();
+                    const modPizzaName2 = bracketsMatch[3] ? bracketsMatch[3].trim() : null;
+                    const mod2Text = bracketsMatch[4] ? bracketsMatch[4].trim() : null;
+                    
+                    // Przypisz modyfikacje do właściwych stron na podstawie nazw pizz
+                    const mods1 = modPizzaName1.toUpperCase() === pizza1Name.toUpperCase() ? mod1Text : (modPizzaName2 && modPizzaName2.toUpperCase() === pizza1Name.toUpperCase() ? mod2Text : '');
+                    const mods2 = modPizzaName1.toUpperCase() === pizza2Name.toUpperCase() ? mod1Text : (modPizzaName2 && modPizzaName2.toUpperCase() === pizza2Name.toUpperCase() ? mod2Text : '');
+                    
+                    modyfikacjeMap[fullPizzaName.toUpperCase()] = {
+                      isPolNaPol: true,
+                      left: mods1 ? { name: pizza1Name, mods: mods1 } : null,
+                      right: mods2 ? { name: pizza2Name, mods: mods2 } : null
+                    };
+                  } else {
+                    // Stary format bez nawiasów - modyfikacje dla obu stron
+                    modyfikacjeMap[fullPizzaName.toUpperCase()] = {
+                      isPolNaPol: true,
+                      left: { name: pizza1Name, mods: modsString },
+                      right: { name: pizza2Name, mods: modsString }
+                    };
+                  }
                 } else {
-                  // Standardowy format: "NAZWA_PIZZY: +skladnik1, -skladnik2"
-                  const match = line.match(/^(.+?):\s*(.+)$/);
-                  if (match) {
-                    const pizzaNazwa = match[1].trim().toUpperCase();
-                    const mods = match[2].trim();
-                    modyfikacjeMap[pizzaNazwa] = { isPolNaPol: false, mods: mods };
+                  // NOWY FORMAT: "NAZWA: [PIZZA1: mods]" lub "NAZWA: [PIZZA1: mods] [PIZZA2: mods]"
+                  const polNaPolFullMatch = line.match(/^(.+?):\\s*\\[(.+?):\\s*(.+?)\\](?:\\s*\\[(.+?):\\s*(.+?)\\])?$/i);
+                  if (polNaPolFullMatch) {
+                    const pizzaName = polNaPolFullMatch[1].trim();
+                    const pizza1Name = polNaPolFullMatch[2].trim();
+                    const pizza1Mods = polNaPolFullMatch[3].trim();
+                    const pizza2Name = polNaPolFullMatch[4] ? polNaPolFullMatch[4].trim() : null;
+                    const pizza2Mods = polNaPolFullMatch[5] ? polNaPolFullMatch[5].trim() : null;
+                    
+                    modyfikacjeMap[pizzaName.toUpperCase()] = {
+                      isPolNaPol: true,
+                      left: pizza1Name ? { name: pizza1Name, mods: pizza1Mods } : null,
+                      right: pizza2Name ? { name: pizza2Name, mods: pizza2Mods } : null
+                    };
+                  } else {
+                    // Standardowy format: "NAZWA_PIZZY: +skladnik1, -skladnik2"
+                    const match = line.match(/^(.+?):\\s*(.+)$/);
+                    if (match) {
+                      const pizzaNazwa = match[1].trim().toUpperCase();
+                      const mods = match[2].trim();
+                      // Użyj tablicy dla pizz o tej samej nazwie
+                      if (!modyfikacjeMap[pizzaNazwa]) {
+                        modyfikacjeMap[pizzaNazwa] = [];
+                      }
+                      modyfikacjeMap[pizzaNazwa].push({ isPolNaPol: false, mods: mods });
+                    }
                   }
                 }
               });
             }
+            
+            // Liczniki dla pizz o tej samej nazwie (aby obsłużyć wiele pizz tego samego typu)
+            const pizzaCounters = {};
+            // Śledzenie użytych modyfikacji pizz pół na pół (aby nie przypisywać ich do zwykłych pizz)
+            const usedPolNaPolMods = new Set();
             
             pizzaHtml = pizzeArray.map((pizza, idx) => {
               const pizzaData = pizzas.find(p => p.id === pizza.id);
@@ -1897,30 +2032,15 @@ const server = http.createServer(async (req, res) => {
               const isPolNaPol = pizza.polNaPol && pizza.polNaPol.id;
               
               if (isPolNaPol) {
-                // Pizza pół na pół - renderuj dwie połówki obok siebie
+                // Pizza pół na pół - renderuj jako jedną pizzę
                 const pizza2Data = pizzas.find(p => p.id === pizza.polNaPol.id);
                 const pizza2Name = pizza2Data ? pizza2Data.nazwa : 'Pizza ID:' + pizza.polNaPol.id;
                 
-                // Pobierz składniki dla obu pizz
-                let skladniki1 = [];
-                let skladniki2 = [];
-                
-                if (pizzaData && allPizzaSkladnik.length > 0) {
-                  const ids1 = allPizzaSkladnik.filter(ps => ps.id_pizza === pizzaData.id).map(ps => ps.id_skladnik);
-                  skladniki1 = allSkladniki.filter(s => ids1.includes(s.id)).map(s => s.nazwa);
-                }
-                
-                if (pizza2Data && allPizzaSkladnik.length > 0) {
-                  const ids2 = allPizzaSkladnik.filter(ps => ps.id_pizza === pizza2Data.id).map(ps => ps.id_skladnik);
-                  skladniki2 = allSkladniki.filter(s => ids2.includes(s.id)).map(s => s.nazwa);
-                }
-                
-                const skladniki1Html = skladniki1.length > 0 ? '<div style="font-size: 1.3em; color: #6b7280; margin-top: 6px; line-height: 1.3;">' + skladniki1.join(', ') + '</div>' : '';
-                const skladniki2Html = skladniki2.length > 0 ? '<div style="font-size: 1.3em; color: #6b7280; margin-top: 6px; line-height: 1.3;">' + skladniki2.join(', ') + '</div>' : '';
+                // Nazwa pizzy pół na pół
+                const polNaPolName = pizzaName + ' / ' + pizza2Name + ' (pół na pół)';
                 
                 // Znajdź modyfikacje dla obu stron
-                let mods1Html = '';
-                let mods2Html = '';
+                let modsArray = [];
                 
                 const pizzaNazwa1Upper = pizzaName.toUpperCase();
                 const pizzaNazwa2Upper = pizza2Name.toUpperCase();
@@ -1929,29 +2049,25 @@ const server = http.createServer(async (req, res) => {
                   const mapEntry = modyfikacjeMap[key];
                   if (mapEntry.isPolNaPol) {
                     if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwa1Upper) {
-                      mods1Html = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + mapEntry.left.mods + '</div>';
+                      modsArray.push(pizzaName.toUpperCase() + ': ' + mapEntry.left.mods);
+                      // Oznacz tę modyfikację jako użytą
+                      usedPolNaPolMods.add(key + '_left');
                     }
                     if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwa2Upper) {
-                      mods2Html = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + mapEntry.right.mods + '</div>';
+                      modsArray.push(pizza2Name.toUpperCase() + ': ' + mapEntry.right.mods);
+                      // Oznacz tę modyfikację jako użytą
+                      usedPolNaPolMods.add(key + '_right');
                     }
                   }
                 }
                 
+                const modsHtml = modsArray.length > 0 
+                  ? '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + modsArray.join('; ') + '</div>'
+                  : '';
+                
                 return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05);">' +
-                  '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">' +
-                    '<div style="border-right: 2px solid #e5e7eb; padding-right: 12px;">' +
-                      '<div style="font-weight: 700; color: #1e40af; font-size: 1.3em; margin-bottom: 4px;">← ' + pizzaName + '</div>' +
-                      '<div style="color: #6b7280; font-size: 1em; font-weight: 600;">[' + pizza.rozmiar + ']</div>' +
-                      skladniki1Html +
-                      mods1Html +
-                    '</div>' +
-                    '<div style="padding-left: 12px;">' +
-                      '<div style="font-weight: 700; color: #c2410c; font-size: 1.3em; margin-bottom: 4px;">' + pizza2Name + ' →</div>' +
-                      '<div style="color: #6b7280; font-size: 1em; font-weight: 600;">[' + pizza.rozmiar + ']</div>' +
-                      skladniki2Html +
-                      mods2Html +
-                    '</div>' +
-                  '</div>' +
+                  '<div style="font-weight: 700; color: hsl(25 95% 53%); font-size: 1.4em; margin-bottom: 4px;">' + polNaPolName + ' - ' + pizza.rozmiar + '</div>' +
+                  modsHtml +
                 '</div>';
               }
               
@@ -1977,20 +2093,30 @@ const server = http.createServer(async (req, res) => {
               let modyfikacjeHtml = '';
               const pizzaNazwaUpper = pizzaName2.toUpperCase();
               
-              // Najpierw sprawdź czy to zwykła pizza
-              let modsData = modyfikacjeMap[pizzaNazwaUpper];
+              // Inicjalizuj licznik dla tej nazwy pizzy jeśli jeszcze nie istnieje
+              if (!pizzaCounters[pizzaNazwaUpper]) {
+                pizzaCounters[pizzaNazwaUpper] = 0;
+              }
+              
+              // Najpierw sprawdź czy to zwykła pizza - użyj licznika dla pizz o tej samej nazwie
+              let modsData = null;
+              const modsArray = modyfikacjeMap[pizzaNazwaUpper];
+              if (Array.isArray(modsArray) && modsArray.length > pizzaCounters[pizzaNazwaUpper]) {
+                modsData = modsArray[pizzaCounters[pizzaNazwaUpper]];
+                pizzaCounters[pizzaNazwaUpper]++;
+              }
               
               // Jeśli nie znaleziono, sprawdź czy ta pizza jest częścią pizzy pół na pół
               if (!modsData) {
                 for (const key in modyfikacjeMap) {
                   const mapEntry = modyfikacjeMap[key];
-                  if (mapEntry.isPolNaPol) {
+                  if (mapEntry && mapEntry.isPolNaPol) {
                     // Sprawdź czy nazwa pizzy pasuje do lewej lub prawej strony
-                    if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwaUpper) {
+                    if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwaUpper && !usedPolNaPolMods.has(key + '_left')) {
                       modsData = { isPolNaPol: true, side: 'left', data: mapEntry.left, fullKey: key };
                       break;
                     }
-                    if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwaUpper) {
+                    if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwaUpper && !usedPolNaPolMods.has(key + '_right')) {
                       modsData = { isPolNaPol: true, side: 'right', data: mapEntry.right, fullKey: key };
                       break;
                     }
@@ -3061,6 +3187,124 @@ const server = http.createServer(async (req, res) => {
       cursor: pointer;
       accent-color: hsl(25 95% 53%);
     }
+    
+    /* Klawiatura ekranowa */
+    #screen-keyboard {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+      padding: 20px;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+      z-index: 10000;
+      display: none;
+      border-top: 3px solid hsl(25 95% 53%);
+    }
+    #screen-keyboard.visible {
+      display: block;
+      animation: slideUp 0.3s ease-out;
+    }
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+      }
+      to {
+        transform: translateY(0);
+      }
+    }
+    .keyboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #444;
+    }
+    .keyboard-title {
+      color: hsl(25 95% 53%);
+      font-size: 18px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .keyboard-close {
+      background: #dc2626;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .keyboard-close:hover {
+      background: #b91c1c;
+      transform: scale(1.05);
+    }
+    .keyboard-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      justify-content: center;
+    }
+    .keyboard-key {
+      background: linear-gradient(180deg, #404040 0%, #2a2a2a 100%);
+      color: white;
+      border: 1px solid #555;
+      padding: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: 600;
+      min-width: 55px;
+      text-align: center;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .keyboard-key:hover {
+      background: linear-gradient(180deg, #505050 0%, #3a3a3a 100%);
+      border-color: hsl(25 95% 53%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(255, 123, 0, 0.3);
+    }
+    .keyboard-key:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(255, 123, 0, 0.2);
+    }
+    .keyboard-key.space {
+      flex: 1;
+      max-width: 400px;
+    }
+    .keyboard-key.backspace {
+      background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%);
+      min-width: 100px;
+    }
+    .keyboard-key.backspace:hover {
+      background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+    }
+    .keyboard-key.enter {
+      background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+      min-width: 80px;
+    }
+    .keyboard-key.enter:hover {
+      background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+    }
+    .keyboard-key.clear {
+      background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+      min-width: 100px;
+    }
+    .keyboard-key.clear:hover {
+      background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+    }
+    .keyboard-key.arrow {
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      min-width: 60px;
+    }
+    .keyboard-key.arrow:hover {
+      background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%);
+    }
   </style>
   <script>
     let kierowcyList = [];
@@ -3076,6 +3320,98 @@ const server = http.createServer(async (req, res) => {
     }
     
     loadKierowcy();
+    
+    let activeInput = null;
+    
+    function showKeyboard() {
+      const keyboard = document.getElementById('screen-keyboard');
+      keyboard.classList.add('visible');
+    }
+    
+    function hideKeyboard() {
+      const keyboard = document.getElementById('screen-keyboard');
+      keyboard.classList.remove('visible');
+      activeInput = null;
+    }
+    
+    function typeKey(key) {
+      if (!activeInput) return;
+      
+      const start = activeInput.selectionStart;
+      const end = activeInput.selectionEnd;
+      const value = activeInput.value;
+      
+      activeInput.value = value.substring(0, start) + key + value.substring(end);
+      activeInput.selectionStart = activeInput.selectionEnd = start + 1;
+      activeInput.focus();
+    }
+    
+    function typeBackspace() {
+      if (!activeInput) return;
+      
+      const start = activeInput.selectionStart;
+      const end = activeInput.selectionEnd;
+      const value = activeInput.value;
+      
+      if (start !== end) {
+        // Usuń zaznaczony tekst
+        activeInput.value = value.substring(0, start) + value.substring(end);
+        activeInput.selectionStart = activeInput.selectionEnd = start;
+      } else if (start > 0) {
+        // Usuń jeden znak przed kursorem
+        activeInput.value = value.substring(0, start - 1) + value.substring(start);
+        activeInput.selectionStart = activeInput.selectionEnd = start - 1;
+      }
+      activeInput.focus();
+    }
+    
+    function clearField() {
+      if (!activeInput) return;
+      activeInput.value = '';
+      activeInput.focus();
+    }
+    
+    function moveLeft() {
+      if (!activeInput) return;
+      const pos = activeInput.selectionStart;
+      if (pos > 0) {
+        activeInput.selectionStart = activeInput.selectionEnd = pos - 1;
+      }
+      activeInput.focus();
+    }
+    
+    function moveRight() {
+      if (!activeInput) return;
+      const pos = activeInput.selectionStart;
+      if (pos < activeInput.value.length) {
+        activeInput.selectionStart = activeInput.selectionEnd = pos + 1;
+      }
+      activeInput.focus();
+    }
+    
+    function clearField() {
+      if (!activeInput) return;
+      activeInput.value = '';
+      activeInput.focus();
+    }
+    
+    function moveLeft() {
+      if (!activeInput) return;
+      const pos = activeInput.selectionStart;
+      if (pos > 0) {
+        activeInput.selectionStart = activeInput.selectionEnd = pos - 1;
+      }
+      activeInput.focus();
+    }
+    
+    function moveRight() {
+      if (!activeInput) return;
+      const pos = activeInput.selectionStart;
+      if (pos < activeInput.value.length) {
+        activeInput.selectionStart = activeInput.selectionEnd = pos + 1;
+      }
+      activeInput.focus();
+    }
     
     function editOrder(orderId, currentPayment, currentPrice, currentKierowca, currentSesjaId, currentTelefon, currentAdres) {
       const telefonCell = document.getElementById('telefon-' + orderId);
@@ -3135,9 +3471,41 @@ const server = http.createServer(async (req, res) => {
         <button class="save-btn" onclick="saveOrder(\${orderId})">Zapisz</button>
         <button class="cancel-btn" onclick="location.reload()">Anuluj</button>
       \`;
+      
+      // Dodaj event listenery do pól input
+      setTimeout(() => {
+        const telefonInput = document.getElementById('telefon-input-' + orderId);
+        const adresInput = document.getElementById('adres-input-' + orderId);
+        const priceInput = document.getElementById('price-input-' + orderId);
+        
+        // Event listener dla telefonu
+        telefonInput.addEventListener('focus', function() {
+          activeInput = this;
+          showKeyboard();
+        });
+        
+        // Event listener dla adresu
+        adresInput.addEventListener('focus', function() {
+          activeInput = this;
+          showKeyboard();
+        });
+        
+        // Event listener dla ceny
+        priceInput.addEventListener('focus', function() {
+          activeInput = this;
+          showKeyboard();
+        });
+        
+        // Pokaż klawiaturę i ustaw focus na telefon
+        telefonInput.focus();
+        activeInput = telefonInput;
+        showKeyboard();
+      }, 100);
     }
     
     function saveOrder(orderId) {
+      // Ukryj klawiaturę
+      hideKeyboard();
       const telefonInput = document.getElementById('telefon-input-' + orderId);
       const adresInput = document.getElementById('adres-input-' + orderId);
       const priceInput = document.getElementById('price-input-' + orderId);
@@ -3392,7 +3760,7 @@ const server = http.createServer(async (req, res) => {
         <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll()" title="Zaznacz wszystkie">
       </th>
       <th style="width: 100px;">Typ</th>
-      <th style="width: 110px;">Telefon</th>
+      <th style="width: 120px;">Telefon</th>
       <th style="width: 180px;">Adres</th>
       <th style="width: 220px;">Pizze</th>
       <th style="width: 160px;">Modyfikacje</th>
@@ -3433,6 +3801,68 @@ const server = http.createServer(async (req, res) => {
     </tr>
     `).join('')}
   </table>
+  
+  <!-- Klawiatura ekranowa -->
+  <div id="screen-keyboard">
+    <div class="keyboard-header">
+      <span class="keyboard-title">⌨ Klawiatura ekranowa</span>
+      <button class="keyboard-close" onclick="hideKeyboard()">✕ Zamknij</button>
+    </div>
+    <div class="keyboard-row">
+      <button class="keyboard-key" onclick="typeKey('1')">1</button>
+      <button class="keyboard-key" onclick="typeKey('2')">2</button>
+      <button class="keyboard-key" onclick="typeKey('3')">3</button>
+      <button class="keyboard-key" onclick="typeKey('4')">4</button>
+      <button class="keyboard-key" onclick="typeKey('5')">5</button>
+      <button class="keyboard-key" onclick="typeKey('6')">6</button>
+      <button class="keyboard-key" onclick="typeKey('7')">7</button>
+      <button class="keyboard-key" onclick="typeKey('8')">8</button>
+      <button class="keyboard-key" onclick="typeKey('9')">9</button>
+      <button class="keyboard-key" onclick="typeKey('0')">0</button>
+    </div>
+    <div class="keyboard-row">
+      <button class="keyboard-key" onclick="typeKey('q')">q</button>
+      <button class="keyboard-key" onclick="typeKey('w')">w</button>
+      <button class="keyboard-key" onclick="typeKey('e')">e</button>
+      <button class="keyboard-key" onclick="typeKey('r')">r</button>
+      <button class="keyboard-key" onclick="typeKey('t')">t</button>
+      <button class="keyboard-key" onclick="typeKey('y')">y</button>
+      <button class="keyboard-key" onclick="typeKey('u')">u</button>
+      <button class="keyboard-key" onclick="typeKey('i')">i</button>
+      <button class="keyboard-key" onclick="typeKey('o')">o</button>
+      <button class="keyboard-key" onclick="typeKey('p')">p</button>
+    </div>
+    <div class="keyboard-row">
+      <button class="keyboard-key" onclick="typeKey('a')">a</button>
+      <button class="keyboard-key" onclick="typeKey('s')">s</button>
+      <button class="keyboard-key" onclick="typeKey('d')">d</button>
+      <button class="keyboard-key" onclick="typeKey('f')">f</button>
+      <button class="keyboard-key" onclick="typeKey('g')">g</button>
+      <button class="keyboard-key" onclick="typeKey('h')">h</button>
+      <button class="keyboard-key" onclick="typeKey('j')">j</button>
+      <button class="keyboard-key" onclick="typeKey('k')">k</button>
+      <button class="keyboard-key" onclick="typeKey('l')">l</button>
+    </div>
+    <div class="keyboard-row">
+      <button class="keyboard-key" onclick="typeKey('z')">z</button>
+      <button class="keyboard-key" onclick="typeKey('x')">x</button>
+      <button class="keyboard-key" onclick="typeKey('c')">c</button>
+      <button class="keyboard-key" onclick="typeKey('v')">v</button>
+      <button class="keyboard-key" onclick="typeKey('b')">b</button>
+      <button class="keyboard-key" onclick="typeKey('n')">n</button>
+      <button class="keyboard-key" onclick="typeKey('m')">m</button>
+      <button class="keyboard-key" onclick="typeKey('.')">.</button>
+      <button class="keyboard-key" onclick="typeKey(',')">,</button>
+      <button class="keyboard-key" onclick="typeKey('/')">/</button>
+    </div>
+    <div class="keyboard-row">
+      <button class="keyboard-key arrow" onclick="moveLeft()">←</button>
+      <button class="keyboard-key arrow" onclick="moveRight()">→</button>
+      <button class="keyboard-key space" onclick="typeKey(' ')">Spacja</button>
+      <button class="keyboard-key clear" onclick="clearField()">🗑 Wyczyść</button>
+      <button class="keyboard-key backspace" onclick="typeBackspace()">⌫ Usuń</button>
+    </div>
+  </div>
   
   <br>
   <p style="color: #666; font-size: 12px;">

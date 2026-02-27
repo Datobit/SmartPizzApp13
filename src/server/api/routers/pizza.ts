@@ -317,7 +317,7 @@ export const pizzaRouter = createTRPCRouter({
               // Dla pizzy z kuponów: bazowa cena + modyfikacje + dopłata 4 PLN za pół na pół
               pizzaPrice = pizzaPrice + modyfikacjeCost + 4;
             } else {
-              // Dla pizzy normalnej: wyższa cena z dwóch pizz + modyfikacje + 4 PLN
+              // Dla pizzy normalnej: połowa ceny pierwszej + połowa ceny drugiej + modyfikacje + 4 PLN
               const drugaPizzaData = await db.pizza.findUnique({
                 where: { id: pizza.polNaPol.id },
               });
@@ -336,8 +336,8 @@ export const pizzaRouter = createTRPCRouter({
                     break;
                 }
                 
-                // Cena pół na pół: wyższa cena + modyfikacje + dopłata 4 PLN
-                pizzaPrice = Math.max(pizzaPrice, drugaCena) + modyfikacjeCost + 4;
+                // Cena pół na pół: (pierwsza/2) + (druga/2) + modyfikacje + dopłata 4 PLN
+                pizzaPrice = (pizzaPrice / 2) + (drugaCena / 2) + modyfikacjeCost + 4;
               }
             }
           } else {
@@ -574,7 +574,7 @@ export const pizzaRouter = createTRPCRouter({
                 // Dla pizzy z kuponów: bazowa cena + modyfikacje + dopłata 4 PLN za pół na pół
                 pizzaPrice = pizzaPrice + modyfikacjeCost + 4;
               } else {
-                // Dla pizzy normalnej: wyższa cena z dwóch pizz + modyfikacje + 4 PLN
+                // Dla pizzy normalnej: połowa ceny pierwszej + połowa ceny drugiej + modyfikacje + 4 PLN
                 const drugaPizzaData = await tx.pizza.findUnique({
                   where: { id: pizza.polNaPol.id },
                 });
@@ -593,8 +593,8 @@ export const pizzaRouter = createTRPCRouter({
                       break;
                   }
                   
-                  // Cena pół na pół: wyższa cena + modyfikacje + dopłata 4 PLN
-                  pizzaPrice = Math.max(pizzaPrice, drugaCena) + modyfikacjeCost + 4;
+                  // Cena pół na pół: (pierwsza/2) + (druga/2) + modyfikacje + dopłata 4 PLN
+                  pizzaPrice = (pizzaPrice / 2) + (drugaCena / 2) + modyfikacjeCost + 4;
                 }
               }
             } else {
