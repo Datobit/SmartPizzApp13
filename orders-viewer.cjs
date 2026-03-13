@@ -109,8 +109,8 @@ const server = http.createServer(async (req, res) => {
           if (cena !== null && cena !== kwotaZamowienia) {
             const aktualnaSesjaId = sesjaId !== null ? (sesjaId === -1 ? null : sesjaId) : staraSesjaId;
             
-            // Jeśli jest przypisana sesja
-            if (aktualnaSesjaId) {
+            // Jeśli jest przypisana sesja i płatność nie jest online
+            if (aktualnaSesjaId && staraPlatnosc !== 'online') {
               // Znajdź transakcję do aktualizacji
               const [transakcjeDoZmiany] = await connection.execute(
                 `SELECT id FROM transakcje
@@ -146,9 +146,11 @@ const server = http.createServer(async (req, res) => {
             if (staraSesjaId !== nowaSesjaId) {
               // Użyj nowej ceny jeśli została zmieniona, inaczej użyj starej
               const kwotaDoTransakcji = cena !== null ? cena : kwotaZamowienia;
+              // Użyj nowej płatności jeśli została zmieniona, inaczej użyj starej
+              const platnosc_do_transakcji = platnosc || staraPlatnosc;
               
-              // Usuń transakcję ze starej sesji (jeśli była)
-              if (staraSesjaId) {
+              // Usuń transakcję ze starej sesji (jeśli była i nie była online)
+              if (staraSesjaId && staraPlatnosc !== 'online') {
                 await connection.execute(
                   `DELETE FROM transakcje 
                    WHERE sesja_id = ? 
@@ -162,13 +164,13 @@ const server = http.createServer(async (req, res) => {
                 console.log(`Usunięto transakcję ze starej sesji ${staraSesjaId}`);
               }
               
-              // Dodaj transakcję do nowej sesji (jeśli jest)
-              if (nowaSesjaId) {
+              // Dodaj transakcję do nowej sesji (jeśli jest i płatność nie jest online)
+              if (nowaSesjaId && platnosc_do_transakcji !== 'online') {
                 await connection.execute(
-                  'INSERT INTO transakcje (sesja_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?)',
-                  [nowaSesjaId, 'wplyw', kwotaDoTransakcji, staraPlatnosc, `Zamówienie - ${adresZamowienia}`]
+                  'INSERT INTO transakcje (sesja_id, zamowienie_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?, ?)',
+                  [nowaSesjaId, orderId, 'wplyw', kwotaDoTransakcji, platnosc_do_transakcji, `Zamówienie - ${adresZamowienia}`]
                 );
-                console.log(`Dodano transakcję do nowej sesji ${nowaSesjaId} z kwotą ${kwotaDoTransakcji} PLN (${staraPlatnosc})`);
+                console.log(`Dodano transakcję do nowej sesji ${nowaSesjaId} z kwotą ${kwotaDoTransakcji} PLN (${platnosc_do_transakcji})`);
               }
             }
           }
@@ -179,9 +181,9 @@ const server = http.createServer(async (req, res) => {
             
             // Jeśli jest przypisana sesja
             if (aktualnaSesjaId) {
-              // Znajdź ID transakcji do aktualizacji
-              const [transakcjeDoZmiany] = await connection.execute(
-                `SELECT id FROM transakcje
+              // Sprawdź czy istnieje już transakcja dla tego zamówienia
+              const [istniejacaTransakcja] = await connection.execute(
+                `SELECT id, forma_platnosci FROM transakcje
                  WHERE sesja_id = ? 
                  AND typ = 'wplyw' 
                  AND kwota = ? 
@@ -191,22 +193,52 @@ const server = http.createServer(async (req, res) => {
                 [aktualnaSesjaId, kwotaZamowienia, `%${adresZamowienia}%`]
               );
               
-              if (transakcjeDoZmiany.length > 0) {
-                // Zaktualizuj formę płatności w istniejącej transakcji
-                await connection.execute(
-                  `UPDATE transakcje 
-                   SET forma_platnosci = ?
-                   WHERE id = ?`,
-                  [platnosc, transakcjeDoZmiany[0].id]
-                );
-                console.log(`Zaktualizowano formę płatności na ${platnosc} dla transakcji ID ${transakcjeDoZmiany[0].id}`);
-              } else {
-                console.log(`Nie znaleziono transakcji do aktualizacji, tworzę nową`);
-                // Jeśli nie znaleziono transakcji do aktualizacji, dodaj nową
-                await connection.execute(
-                  'INSERT INTO transakcje (sesja_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?)',
-                  [aktualnaSesjaId, 'wplyw', kwotaZamowienia, platnosc, `Zamówienie - ${adresZamowienia}`]
-                );
+              // Jeśli zmiana na 'online'
+              if (platnosc === 'online') {
+                // Usuń transakcję jeśli istnieje
+                if (istniejacaTransakcja.length > 0) {
+                  await connection.execute(
+                    `DELETE FROM transakcje WHERE id = ?`,
+                    [istniejacaTransakcja[0].id]
+                  );
+                  console.log(`Usunięto transakcję - zmiana na płatność online`);
+                }
+              } 
+              // Jeśli zmiana z 'online' na gotówka/kartę
+              else if (staraPlatnosc === 'online') {
+                // Tylko dodaj transakcję jeśli jeszcze nie istnieje
+                if (istniejacaTransakcja.length === 0) {
+                  await connection.execute(
+                    'INSERT INTO transakcje (sesja_id, zamowienie_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?, ?)',
+                    [aktualnaSesjaId, orderId, 'wplyw', kwotaZamowienia, platnosc, `Zamówienie - ${adresZamowienia}`]
+                  );
+                  console.log(`Dodano transakcję - zmiana z online na ${platnosc}`);
+                } else {
+                  // Jeśli transakcja już istnieje, tylko zaktualizuj formę płatności
+                  await connection.execute(
+                    `UPDATE transakcje SET forma_platnosci = ? WHERE id = ?`,
+                    [platnosc, istniejacaTransakcja[0].id]
+                  );
+                  console.log(`Zaktualizowano formę płatności na ${platnosc} (transakcja już istniała)`);
+                }
+              }
+              // Jeśli zmiana między gotówką a kartą
+              else {
+                if (istniejacaTransakcja.length > 0) {
+                  // Zaktualizuj formę płatności w istniejącej transakcji
+                  await connection.execute(
+                    `UPDATE transakcje SET forma_platnosci = ? WHERE id = ?`,
+                    [platnosc, istniejacaTransakcja[0].id]
+                  );
+                  console.log(`Zaktualizowano formę płatności na ${platnosc} dla transakcji ID ${istniejacaTransakcja[0].id}`);
+                } else {
+                  console.log(`Nie znaleziono transakcji do aktualizacji, tworzę nową`);
+                  // Jeśli nie znaleziono transakcji do aktualizacji, dodaj nową
+                  await connection.execute(
+                    'INSERT INTO transakcje (sesja_id, zamowienie_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?, ?)',
+                    [aktualnaSesjaId, orderId, 'wplyw', kwotaZamowienia, platnosc, `Zamówienie - ${adresZamowienia}`]
+                  );
+                }
               }
             }
           }
@@ -314,6 +346,706 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     const sesjaHtml = require('fs').readFileSync(path.join(__dirname, 'sesja.html'), 'utf8');
     res.end(sesjaHtml);
+    return;
+  }
+  
+  // Panel Rozliczenia Pizzerii
+  if (pathname === '/rozliczenie') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    const rozliczenieHtml = `<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rozliczenie Pizzerii</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    /* Powiększ kalendarz Chrome/Edge o 50% */
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      transform: scale(1.5);
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      color: #1f2937;
+    }
+    
+    .date-selector {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    
+    .date-selector input[type="date"] {
+      padding: 14px 20px;
+      border: 3px solid #10b981;
+      border-radius: 8px;
+      font-size: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      min-width: 200px;
+      background: white;
+    }
+    
+    .date-selector input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      font-size: 24px;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+    }
+    
+    /* Powiększ kalendarz wyskakujący o 50% */
+    .date-selector input[type="date"]::-webkit-datetime-edit {
+      font-size: 20px;
+    }
+    
+    .date-selector input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+      font-size: 20px;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+      transition: all 0.3s;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(16, 185, 129, 0.4);
+    }
+    
+    .btn-back {
+      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+      color: white;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .section h2 {
+      font-size: 22px;
+      color: #1f2937;
+      margin-bottom: 16px;
+      border-bottom: 3px solid #10b981;
+      padding-bottom: 8px;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16px;
+    }
+    
+    th {
+      background: #f3f4f6;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    tr:hover {
+      background: #f9fafb;
+    }
+    
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    
+    .summary-card {
+      background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+      padding: 20px;
+      border-radius: 10px;
+      border-left: 4px solid #10b981;
+    }
+    
+    .summary-card.wydatek {
+      border-left-color: #ef4444;
+    }
+    
+    .summary-card.info {
+      border-left-color: #3b82f6;
+    }
+    
+    .summary-card h3 {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+    
+    .summary-card .amount {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1f2937;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #6b7280;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      font-size: 18px;
+      color: #6b7280;
+    }
+    
+    .badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .badge-gotowka { background: #dcfce7; color: #166534; }
+    .badge-karta { background: #dbeafe; color: #1e40af; }
+    .badge-online { background: #e0e7ff; color: #4338ca; }
+    .badge-wplyw { background: #dcfce7; color: #166534; }
+    .badge-wydatek { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Rozliczenie Pizzerii</h1>
+      <div class="date-selector">
+        <a href="/" class="btn-back">← Powrót do POZ</a>
+        <input type="date" id="dateInput" value="" style="cursor: pointer;">
+        <button class="btn-primary" onclick="loadData()">Pokaż dane</button>
+      </div>
+    </div>
+    
+    <div id="loading" class="loading" style="display: none;">
+      Ładowanie danych...
+    </div>
+    
+    <script>
+    // Zablokuj ręczną edycję daty
+    const dateInput = document.getElementById('dateInput');
+    dateInput.addEventListener('keydown', (e) => e.preventDefault());
+    dateInput.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      dateInput.showPicker();
+    });
+    dateInput.addEventListener('focus', (e) => {
+      e.preventDefault();
+      dateInput.blur();
+      dateInput.showPicker();
+    });
+    </script>
+    
+    <div id="content" style="display: none;">
+      <!-- Sekcja 0: Stan kasy początkowy -->
+      <div class="section">
+        <h2>💵 Stan kasy początkowy</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <div>
+            <h3 style="font-size: 16px; margin-bottom: 12px; color: #374151;">Wpisz stan kasy na start dnia:</h3>
+            <div style="display: flex; gap: 12px; align-items: flex-end;">
+              <div style="flex: 1;">
+                <label style="display: block; font-size: 14px; color: #6b7280; margin-bottom: 6px;">Kwota (PLN)</label>
+                <input type="number" id="stanKasyInput" step="0.01" placeholder="0.00" 
+                  style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 18px; font-weight: 600; -moz-appearance: textfield;">
+                <style>
+                  #stanKasyInput::-webkit-outer-spin-button,
+                  #stanKasyInput::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                  }
+                </style>
+              </div>
+              <div style="flex: 1;">
+                <label style="display: block; font-size: 14px; color: #6b7280; margin-bottom: 6px;">Notatka (opcjonalnie)</label>
+                <input type="text" id="stanKasyNotatka" placeholder="" 
+                  style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+              </div>
+              <button onclick="zapiszStanKasy()" class="btn-primary" style="padding: 12px 24px; white-space: nowrap;">
+                Zapisz stan
+              </button>
+            </div>
+            <p style="font-size: 13px; color: #6b7280; margin-top: 8px;">💡 Pole wyczyści się po wyjściu z formularza</p>
+          </div>
+          <div>
+            <h3 style="font-size: 16px; margin-bottom: 8px; color: #374151;">Ostatnie 10 wpisów:</h3>
+            <p style="font-size: 13px; color: #059669; margin-bottom: 12px; padding: 8px; background: #d1fae5; border-radius: 6px; border-left: 3px solid #10b981;">
+              ℹ️ <strong>Ostatni zapis</strong> to aktualny stan kasy brany w rozliczeniu - powinna to być wartość stanu kasy przed rozpoczęciem dnia pracy pizzerii.
+            </p>
+            <div id="ostatnieStany" style="max-height: 200px; overflow-y: auto; background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px;">
+              Ładowanie...
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Sekcja A: Zamówienia -->
+      <div class="section">
+        <h2>📦 Zamówienia z dnia</h2>
+        <table id="zamowieniaTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Godzina</th>
+              <th>Typ zamówienia</th>
+              <th>Kwota</th>
+              <th>Płatność</th>
+            </tr>
+          </thead>
+          <tbody id="zamowieniaBody"></tbody>
+        </table>
+        <div class="summary" id="zamowieniaSummary"></div>
+      </div>
+      
+      <!-- Sekcja B: Transakcje -->
+      <div class="section">
+        <h2>💸 Transakcje (wpływy/wydatki)</h2>
+        <table id="transakcjeTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Godzina</th>
+              <th>Typ</th>
+              <th>Kwota</th>
+              <th>Forma</th>
+              <th>Opis</th>
+              <th>Sesja</th>
+            </tr>
+          </thead>
+          <tbody id="transakcjeBody"></tbody>
+        </table>
+        <div class="summary" id="transakcjeSummary"></div>
+      </div>
+      
+      <!-- Sekcja C: Podsumowanie -->
+      <div class="section">
+        <h2>📊 Podsumowanie dnia</h2>
+        <div class="summary" id="podsumowanie"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Ustaw dzisiejszą datę
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('dateInput').value = today;
+    
+    // Załaduj dane automatycznie przy starcie
+    loadData();
+    loadOstatnieStany();
+    
+    // Wyczyść pole po wyjściu/odświeżeniu
+    window.addEventListener('beforeunload', () => {
+      document.getElementById('stanKasyInput').value = '';
+      document.getElementById('stanKasyNotatka').value = '';
+    });
+    
+    async function zapiszStanKasy() {
+      const kwota = document.getElementById('stanKasyInput').value;
+      const notatka = document.getElementById('stanKasyNotatka').value;
+      
+      if (!kwota || parseFloat(kwota) < 0) {
+        alert('Wpisz prawidłową kwotę');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/stankasy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kwota: parseFloat(kwota), notatka })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          alert('✅ Stan kasy zapisany!');
+          document.getElementById('stanKasyInput').value = '';
+          document.getElementById('stanKasyNotatka').value = '';
+          loadOstatnieStany();
+          loadData(); // Odśwież podsumowanie
+        } else {
+          alert('Błąd: ' + result.error);
+        }
+      } catch (error) {
+        console.error('Błąd zapisywania:', error);
+        alert('Błąd zapisywania stanu kasy');
+      }
+    }
+    
+    async function loadOstatnieStany() {
+      try {
+        const response = await fetch('/api/stankasy/ostatnie');
+        const stany = await response.json();
+        
+        const container = document.getElementById('ostatnieStany');
+        
+        if (stany.length === 0) {
+          container.innerHTML = '<p style="color: #9ca3af;">Brak wpisów</p>';
+          return;
+        }
+        
+        container.innerHTML = stany.map(s => \`
+          <div style="padding: 8px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
+              <strong style="color: #10b981;">\${parseFloat(s.kwota).toFixed(2)} PLN</strong>
+              <span style="color: #9ca3af; font-size: 12px; margin-left: 8px;">
+                \${new Date(s.data_utworzenia).toLocaleString('pl-PL')}
+              </span>
+              \${s.notatka ? '<br><small style="color: #6b7280;">' + s.notatka + '</small>' : ''}
+            </div>
+            <button onclick="usunStanKasy(\${s.id})" 
+              style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;"
+              onmouseover="this.style.background='#dc2626'" 
+              onmouseout="this.style.background='#ef4444'"
+              title="Usuń ten wpis">
+              🗑️ Usuń
+            </button>
+          </div>
+        \`).join('');
+      } catch (error) {
+        console.error('Błąd ładowania stanów:', error);
+        document.getElementById('ostatnieStany').innerHTML = '<p style="color: #ef4444;">Błąd ładowania</p>';
+      }
+    }
+    
+    async function usunStanKasy(id) {
+      if (!confirm('Czy na pewno chcesz usunąć ten wpis?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/stankasy/' + id, {
+          method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          alert('✅ Wpis usunięty!');
+          loadOstatnieStany();
+          loadData(); // Odśwież podsumowanie
+        } else {
+          alert('Błąd: ' + result.error);
+        }
+      } catch (error) {
+        console.error('Błąd usuwania:', error);
+        alert('Błąd usuwania wpisu');
+      }
+    }
+    
+    async function loadData() {
+      const date = document.getElementById('dateInput').value;
+      if (!date) {
+        alert('Wybierz datę');
+        return;
+      }
+      
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('content').style.display = 'none';
+      
+      try {
+        const response = await fetch('/api/rozliczenie?data=' + date);
+        const data = await response.json();
+        
+        renderZamowienia(data.zamowienia);
+        renderTransakcje(data.transakcje, data.sesje || []);
+        renderPodsumowanie(data.podsumowanie);
+        
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+      } catch (error) {
+        console.error('Błąd:', error);
+        alert('Błąd ładowania danych: ' + error.message);
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
+    
+    function renderZamowienia(zamowienia) {
+      const tbody = document.getElementById('zamowieniaBody');
+      const summary = document.getElementById('zamowieniaSummary');
+      
+      if (zamowienia.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Brak zamówień w tym dniu</td></tr>';
+        summary.innerHTML = '';
+        return;
+      }
+      
+      tbody.innerHTML = zamowienia.map(z => \`
+        <tr>
+          <td>#\${z.id}</td>
+          <td>\${new Date(z.created_at).toLocaleTimeString('pl-PL')}</td>
+          <td>\${z.typ_zamowienia}</td>
+          <td><strong>\${z.cena_calkowita} PLN</strong></td>
+          <td><span class="badge badge-\${z.platnosc}">\${z.platnosc.toUpperCase()}</span></td>
+        </tr>
+      \`).join('');
+      
+      // Podsumowanie zamówień - rozdziel na miejsce/wynos vs dowóz
+      const gotowkaNaMiejscuWynos = zamowienia.filter(z => z.platnosc === 'gotowka' && (z.typ_zamowienia === 'na_miejscu' || z.typ_zamowienia === 'na_wynos')).reduce((sum, z) => sum + parseFloat(z.cena_calkowita), 0);
+      const gotowkaDowoz = zamowienia.filter(z => z.platnosc === 'gotowka' && z.typ_zamowienia === 'dowoz').reduce((sum, z) => sum + parseFloat(z.cena_calkowita), 0);
+      const karta = zamowienia.filter(z => z.platnosc === 'karta').reduce((sum, z) => sum + parseFloat(z.cena_calkowita), 0);
+      const online = zamowienia.filter(z => z.platnosc === 'online').reduce((sum, z) => sum + parseFloat(z.cena_calkowita), 0);
+      const razem = gotowkaNaMiejscuWynos + gotowkaDowoz + karta + online;
+      
+      summary.innerHTML = \`
+        <div class="summary-card">
+          <h3>Gotówka (na miejscu/wynos)</h3>
+          <div class="amount">\${gotowkaNaMiejscuWynos.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">Wpływ do kasy</small>
+        </div>
+        <div class="summary-card">
+          <h3>Gotówka (dowóz)</h3>
+          <div class="amount">\${gotowkaDowoz.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">W saldzie kierowcy</small>
+        </div>
+        <div class="summary-card info">
+          <h3>Karta</h3>
+          <div class="amount">\${karta.toFixed(2)} PLN</div>
+        </div>
+        <div class="summary-card info">
+          <h3>Online</h3>
+          <div class="amount">\${online.toFixed(2)} PLN</div>
+        </div>
+        <div class="summary-card">
+          <h3>RAZEM PRZYCHÓD</h3>
+          <div class="amount">\${razem.toFixed(2)} PLN</div>
+        </div>
+      \`;
+    }
+    
+    function renderTransakcje(transakcje, sesje) {
+      const tbody = document.getElementById('transakcjeBody');
+      const summary = document.getElementById('transakcjeSummary');
+      
+      if (transakcje.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Brak transakcji w tym dniu</td></tr>';
+        summary.innerHTML = '';
+        return;
+      }
+      
+      // Jeśli jest więcej niż jedna sesja, grupuj transakcje według kierowców
+      if (sesje.length > 1) {
+        let html = '';
+        
+        // Dla każdego kierowcy
+        sesje.forEach(sesja => {
+          const transakcjeSesji = transakcje.filter(t => t.sesja_id === sesja.id);
+          if (transakcjeSesji.length > 0) {
+            html += \`
+              <tr style="background: #f3f4f6; font-weight: 600;">
+                <td colspan="7" style="padding: 12px 16px;">
+                  👤 \${sesja.kierowca_nazwa} - Sesja #\${sesja.id}
+                </td>
+              </tr>
+            \`;
+            
+            html += transakcjeSesji.map(t => \`
+              <tr>
+                <td>#\${t.id}</td>
+                <td>\${new Date(t.created_at).toLocaleTimeString('pl-PL')}</td>
+                <td><span class="badge badge-\${t.typ}">\${t.typ.toUpperCase()}</span></td>
+                <td><strong>\${t.kwota} PLN</strong></td>
+                <td>\${t.forma_platnosci || '-'}</td>
+                <td>\${t.opis || '-'}</td>
+                <td>\${sesja.kierowca_nazwa} - Sesja #\${sesja.id}</td>
+              </tr>
+            \`).join('');
+          }
+        });
+        
+        // Transakcje bez sesji (manualne)
+        const transakcjeManualne = transakcje.filter(t => !t.sesja_id);
+        if (transakcjeManualne.length > 0) {
+          html += \`
+            <tr style="background: #fef3c7; font-weight: 600;">
+              <td colspan="7" style="padding: 12px 16px;">
+                📝 Transakcje manualne (bez sesji)
+              </td>
+            </tr>
+          \`;
+          
+          html += transakcjeManualne.map(t => \`
+            <tr>
+              <td>#\${t.id}</td>
+              <td>\${new Date(t.created_at).toLocaleTimeString('pl-PL')}</td>
+              <td><span class="badge badge-\${t.typ}">\${t.typ.toUpperCase()}</span></td>
+              <td><strong>\${t.kwota} PLN</strong></td>
+              <td>\${t.forma_platnosci || '-'}</td>
+              <td>\${t.opis || '-'}</td>
+              <td>-</td>
+            </tr>
+          \`).join('');
+        }
+        
+        tbody.innerHTML = html;
+      } else {
+        // Standardowe wyświetlanie gdy jedna sesja lub brak sesji
+        tbody.innerHTML = transakcje.map(t => \`
+          <tr>
+            <td>#\${t.id}</td>
+            <td>\${new Date(t.created_at).toLocaleTimeString('pl-PL')}</td>
+            <td><span class="badge badge-\${t.typ}">\${t.typ.toUpperCase()}</span></td>
+            <td><strong>\${t.kwota} PLN</strong></td>
+            <td>\${t.forma_platnosci || '-'}</td>
+            <td>\${t.opis || '-'}</td>
+            <td>\${t.kierowca_nazwa && t.sesja_id ? t.kierowca_nazwa + ' - Sesja #' + t.sesja_id : '-'}</td>
+          </tr>
+        \`).join('');
+      }
+      
+      // Podsumowanie transakcji
+      const wplywManualne = transakcje.filter(t => t.typ === 'wplyw' && t.sesja_id && t.forma_platnosci === 'manualny').reduce((sum, t) => sum + parseFloat(t.kwota), 0);
+      const wplywZamowienia = transakcje.filter(t => t.typ === 'wplyw' && t.sesja_id && t.forma_platnosci === 'gotowka').reduce((sum, t) => sum + parseFloat(t.kwota), 0);
+      const wydatki = transakcje.filter(t => t.typ === 'wydatek').reduce((sum, t) => sum + parseFloat(t.kwota), 0);
+      
+      // Oblicz salda sesji
+      const sesjeIds = [...new Set(transakcje.filter(t => t.sesja_id).map(t => t.sesja_id))];
+      let saldaSesji = 0;
+      for (const sesjaId of sesjeIds) {
+        const transakcjeSesji = transakcje.filter(t => t.sesja_id === sesjaId);
+        let saldoSesji = 0;
+        for (const t of transakcjeSesji) {
+          if (t.forma_platnosci === 'karta' || t.forma_platnosci === 'online') continue;
+          saldoSesji += t.typ === 'wplyw' ? parseFloat(t.kwota) : -parseFloat(t.kwota);
+        }
+        saldaSesji += saldoSesji;
+      }
+      
+      summary.innerHTML = \`
+        <div class="summary-card wydatek">
+          <h3>Pieniądze które dostali z kasy</h3>
+          <div class="amount">-\${wplywManualne.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">Wyszło z kasy</small>
+        </div>
+        <div class="summary-card">
+          <h3>Salda sesji (wrócą do kasy)</h3>
+          <div class="amount">+\${saldaSesji.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">Po wydatkach (-\${wydatki.toFixed(2)}) i dowozach (+\${wplywZamowienia.toFixed(2)})</small>
+        </div>
+        <div class="summary-card info">
+          <h3>Bilans kierowców</h3>
+          <div class="amount">\${(saldaSesji - wplywManualne).toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">Różnica: co wrócą minus co dostali</small>
+        </div>
+      \`;
+    }
+    
+    function renderPodsumowanie(podsumowanie) {
+      const container = document.getElementById('podsumowanie');
+      
+      const stanPoczatkowy = podsumowanie.stan_poczatkowy || 0;
+      const stanKoncowy = podsumowanie.stan_koncowy || 0;
+      const zmianaWKasie = podsumowanie.zmiana_w_kasie || 0;
+      
+      container.innerHTML = \`
+        <div class="summary-card info">
+          <h3>Stan kasy początkowy</h3>
+          <div class="amount">\${stanPoczatkowy.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">\${stanPoczatkowy > 0 ? 'Ostatni wpis z tabeli' : 'Brak wpisu w bazie'}</small>
+        </div>
+        <div class="summary-card">
+          <h3>Przychód z zamówień (gotówka)</h3>
+          <div class="amount">+\${podsumowanie.gotowka_zamowienia.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">Na miejscu i na wynos (dowóz w saldzie kierowcy)</small>
+        </div>
+        <div class="summary-card wydatek">
+          <h3>Pieniądze które dostali kierowcy z kasy</h3>
+          <div class="amount">-\${podsumowanie.pieniadze_wyszly.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">Na zakupy, paliwo itp.</small>
+        </div>
+        <div class="summary-card">
+          <h3>Pieniądze które wrócły od kierowców</h3>
+          <div class="amount">+\${podsumowanie.salda_sesji.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">Reszta po wydatkach i dowozach</small>
+        </div>
+        <div class="summary-card wydatek">
+          <h3>Wydatki kierowców</h3>
+          <div class="amount">-\${podsumowanie.wydatki_kierowcow.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">Zakupy, paliwo, itp.</small>
+        </div>
+        <div class="summary-card" style="grid-column: 1 / -1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none;">
+          <h3 style="color: rgba(255,255,255,0.8);">OCZEKIWANY STAN KOŃCOWY KASY</h3>
+          <div class="amount" style="color: white; font-size: 48px;">\${stanKoncowy.toFixed(2)} PLN</div>
+          <div style="color: rgba(255,255,255,0.85); font-size: 14px; margin-top: 12px; line-height: 1.6;">
+            <div style="margin-bottom: 6px;">(stan początkowy kasy) - (kasa oddana kierowcom) + (salda z sesji kierowców) + (przychód z zamówień w gotówce)</div>
+            <div style="font-weight: 600; font-size: 15px;">= \${stanPoczatkowy.toFixed(2)} - \${podsumowanie.pieniadze_wyszly.toFixed(2)} + \${podsumowanie.salda_sesji.toFixed(2)} + \${podsumowanie.gotowka_zamowienia.toFixed(2)}</div>
+          </div>
+        </div>
+        <div class="summary-card" style="grid-column: 1 / -1; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: white; border: none;">
+          <h3 style="color: rgba(255,255,255,0.9);">ZMIANA W KASIE</h3>
+          <div class="amount" style="color: white; font-size: 42px;">\${zmianaWKasie >= 0 ? '+' : ''}\${zmianaWKasie.toFixed(2)} PLN</div>
+          <small style="color: rgba(255,255,255,0.8);">= Stan końcowy (\${stanKoncowy.toFixed(2)}) - Stan początkowy (\${stanPoczatkowy.toFixed(2)})</small>
+        </div>
+        <div class="summary-card info">
+          <h3>Karta + Online (info)</h3>
+          <div class="amount">\${podsumowanie.karta_online.toFixed(2)} PLN</div>
+          <small style="color: #6b7280;">Nie wpływa na kasę</small>
+        </div>
+      \`;
+    }
+  </script>
+</body>
+</html>`;
+    res.end(rozliczenieHtml);
     return;
   }
   
@@ -607,6 +1339,266 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   
+  // API: Rozliczenie pizzerii - dane z wybranego dnia
+  if (pathname === '/api/rozliczenie' && req.method === 'GET') {
+    let connection;
+    try {
+      const urlParams = new URLSearchParams(parsedUrl.search);
+      const data = urlParams.get('data'); // Format: YYYY-MM-DD
+      
+      if (!data) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Brak parametru data' }));
+        return;
+      }
+      
+      connection = await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'Pepperoni13',
+        database: 'SmartPizzApp13'
+      });
+      
+      // Pobierz zamówienia z danego dnia
+      const [zamowienia] = await connection.execute(
+        `SELECT id, typ_zamowienia, cena_calkowita, platnosc, created_at
+         FROM zamowienia
+         WHERE DATE(created_at) = ?
+         ORDER BY created_at ASC`,
+        [data]
+      );
+      
+      // Pobierz transakcje z danego dnia (manualne wpływy/wydatki + transakcje kierowców)
+      const [transakcje] = await connection.execute(
+        `SELECT t.id, t.typ, t.kwota, t.forma_platnosci, t.opis, t.sesja_id, t.zamowienie_id, t.data_utworzenia as created_at,
+                s.kierowca_id, k.nazwa as kierowca_nazwa
+         FROM transakcje t
+         LEFT JOIN sesje s ON t.sesja_id = s.id
+         LEFT JOIN kierowcy k ON s.kierowca_id = k.id
+         WHERE DATE(t.data_utworzenia) = ?
+         ORDER BY t.data_utworzenia ASC`,
+        [data]
+      );
+      
+      // Pobierz unikalne sesje z nazwami kierowców
+      const [sesje] = await connection.execute(
+        `SELECT DISTINCT s.id, s.kierowca_id, k.nazwa as kierowca_nazwa
+         FROM sesje s
+         JOIN kierowcy k ON s.kierowca_id = k.id
+         WHERE s.id IN (
+           SELECT DISTINCT sesja_id FROM transakcje WHERE sesja_id IS NOT NULL AND DATE(data_utworzenia) = ?
+         )
+         ORDER BY s.id ASC`,
+        [data]
+      );
+      
+      // Oblicz podsumowanie - NOWA LOGIKA
+      // 1. Przychód z zamówień gotówką TYLKO "na miejscu" i "na wynos" (w POZ)
+      // Dowóz jest liczony tylko w saldzie kierowcy
+      const gotowkaZamowienia = zamowienia
+        .filter(z => z.platnosc === 'gotowka' && (z.typ_zamowienia === 'na_miejscu' || z.typ_zamowienia === 'na_wynos'))
+        .reduce((sum, z) => sum + parseFloat(z.cena_calkowita), 0);
+      
+      const kartaOnline = zamowienia
+        .filter(z => z.platnosc === 'karta' || z.platnosc === 'online')
+        .reduce((sum, z) => sum + parseFloat(z.cena_calkowita), 0);
+      
+      // 2. Pieniądze które WYSZŁY z kasy do kierowców (wpływy ręczne typu "manualny")
+      const pieniadzeWyszlyDlaKierowcow = transakcje
+        .filter(t => t.typ === 'wplyw' && t.sesja_id && t.forma_platnosci === 'manualny')
+        .reduce((sum, t) => sum + parseFloat(t.kwota), 0);
+      
+      // 3. Oblicz salda sesji (pieniądze które WRÓCIŁY od kierowców)
+      let saldaSesji = 0;
+      for (const sesja of sesje) {
+        const transakcjeSesji = transakcje.filter(t => t.sesja_id === sesja.id);
+        let saldoSesji = 0;
+        
+        for (const t of transakcjeSesji) {
+          // Pomijamy transakcje kartą i online
+          if (t.forma_platnosci === 'karta' || t.forma_platnosci === 'online') {
+            continue;
+          }
+          
+          if (t.typ === 'wplyw') {
+            saldoSesji += parseFloat(t.kwota);
+          } else {
+            saldoSesji -= parseFloat(t.kwota);
+          }
+        }
+        
+        saldaSesji += saldoSesji;
+      }
+      
+      // 4. Wydatki kierowców (na zakupy, paliwo itp)
+      const wydatkiKierowcow = transakcje
+        .filter(t => t.typ === 'wydatek' && t.sesja_id)
+        .reduce((sum, t) => sum + parseFloat(t.kwota), 0);
+      
+      // 5. Stan końcowy kasy - zawsze używaj ostatniego wpisu niezależnie od daty
+      const stanPoczatkowy = await (async () => {
+        const [stanyKasy] = await connection.execute(
+          `SELECT kwota FROM stankasy 
+           ORDER BY data_utworzenia DESC 
+           LIMIT 1`
+        );
+        return stanyKasy.length > 0 ? parseFloat(stanyKasy[0].kwota) : 0;
+      })();
+      
+      // Stan końcowy = Stan początkowy - pieniądze dla kierowców + salda sesji + przychód z zamówień
+      const stanKoncowy = stanPoczatkowy - pieniadzeWyszlyDlaKierowcow + saldaSesji + gotowkaZamowienia;
+      const zmianaWKasie = stanKoncowy - stanPoczatkowy;
+      
+      const podsumowanie = {
+        gotowka_zamowienia: gotowkaZamowienia,
+        karta_online: kartaOnline,
+        pieniadze_wyszly: pieniadzeWyszlyDlaKierowcow,
+        salda_sesji: saldaSesji,
+        wydatki_kierowcow: wydatkiKierowcow,
+        stan_poczatkowy: stanPoczatkowy,
+        stan_koncowy: stanKoncowy,
+        zmiana_w_kasie: zmianaWKasie
+      };
+      
+      await connection.end();
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        zamowienia,
+        transakcje,
+        podsumowanie,
+        sesje
+      }));
+      
+    } catch (error) {
+      console.error('Błąd API rozliczenie:', error);
+      if (connection) await connection.end();
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+  
+  // API: Pobierz ostatnie 10 wpisów stanu kasy
+  if (pathname === '/api/stankasy/ostatnie' && req.method === 'GET') {
+    let connection;
+    try {
+      connection = await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'Pepperoni13',
+        database: 'SmartPizzApp13'
+      });
+      
+      const [stany] = await connection.execute(
+        `SELECT id, kwota, data_utworzenia, notatka
+         FROM stankasy
+         ORDER BY data_utworzenia DESC
+         LIMIT 10`
+      );
+      
+      await connection.end();
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(stany));
+      
+    } catch (error) {
+      console.error('Błąd pobierania stanów kasy:', error);
+      if (connection) await connection.end();
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+  
+  // API: Zapisz nowy stan kasy
+  if (pathname === '/api/stankasy' && req.method === 'POST') {
+    let connection;
+    let body = '';
+    
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', async () => {
+      try {
+        const data = JSON.parse(body);
+        const { kwota, notatka } = data;
+        
+        if (!kwota || isNaN(kwota)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Nieprawidłowa kwota' }));
+          return;
+        }
+        
+        connection = await mysql.createConnection({
+          host: 'localhost',
+          user: 'root',
+          password: 'Pepperoni13',
+          database: 'SmartPizzApp13'
+        });
+        
+        await connection.execute(
+          `INSERT INTO stankasy (kwota, notatka) VALUES (?, ?)`,
+          [parseFloat(kwota), notatka || null]
+        );
+        
+        await connection.end();
+        
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Stan kasy zapisany' }));
+        
+      } catch (error) {
+        console.error('Błąd zapisywania stanu kasy:', error);
+        if (connection) await connection.end();
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    });
+    return;
+  }
+  
+  // API: Usuń stan kasy
+  if (pathname.startsWith('/api/stankasy/') && req.method === 'DELETE') {
+    let connection;
+    try {
+      const id = pathname.split('/').pop();
+      
+      if (!id || isNaN(id)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Nieprawidłowe ID' }));
+        return;
+      }
+      
+      connection = await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'Pepperoni13',
+        database: 'SmartPizzApp13'
+      });
+      
+      const [result] = await connection.execute(
+        `DELETE FROM stankasy WHERE id = ?`,
+        [parseInt(id)]
+      );
+      
+      await connection.end();
+      
+      if (result.affectedRows === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Nie znaleziono wpisu' }));
+        return;
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: 'Stan kasy usunięty' }));
+      
+    } catch (error) {
+      console.error('Błąd usuwania stanu kasy:', error);
+      if (connection) await connection.end();
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+  
   // API: Historia zamkniętych sesji
   if (pathname === '/api/sesje/historia' && req.method === 'GET') {
     let connection;
@@ -651,17 +1643,237 @@ const server = http.createServer(async (req, res) => {
         database: 'SmartPizzApp13'
       });
       
+      // Pobierz wszystkie transakcje
       const [transakcje] = await connection.execute(
         'SELECT * FROM transakcje WHERE sesja_id = ? ORDER BY data_utworzenia ASC',
         [sesjaId]
       );
       
+      // Pobierz wszystkie zamówienia przypisane do sesji (w tym online)
+      const [zamowienia] = await connection.execute(
+        `SELECT id, telefon, adres, cena_calkowita, platnosc, created_at 
+         FROM zamowienia 
+         WHERE sesja_id = ? 
+         ORDER BY created_at ASC`,
+        [sesjaId]
+      );
+      
+      // Połącz transakcje i zamówienia w jedną listę
+      const wszystko = [];
+      
+      // Dodaj transakcje
+      transakcje.forEach(t => {
+        wszystko.push({
+          typ: 'transakcja',
+          data: t.data_utworzenia,
+          transakcja: t
+        });
+      });
+      
+      // Dodaj zamówienia online (które nie mają transakcji)
+      zamowienia.forEach(z => {
+        if (z.platnosc === 'online') {
+          wszystko.push({
+            typ: 'zamowienie_online',
+            data: z.created_at,
+            zamowienie: z
+          });
+        }
+      });
+      
+      // Sortuj po dacie
+      wszystko.sort((a, b) => new Date(a.data) - new Date(b.data));
+      
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify(transakcje));
+      res.end(JSON.stringify(wszystko));
       
       if (connection) await connection.end();
     } catch (error) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: error.message }));
+      if (connection) await connection.end();
+    }
+    return;
+  }
+  
+  // API: Usuwanie transakcji manualnej
+  if (pathname.startsWith('/api/transakcje/') && req.method === 'DELETE') {
+    const transakcjaId = pathname.split('/')[3];
+    let connection;
+    try {
+      connection = await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'Pepperoni13',
+        database: 'SmartPizzApp13'
+      });
+      
+      // Sprawdź czy transakcja jest manualna (bez zamowienie_id)
+      const [transakcja] = await connection.execute(
+        'SELECT zamowienie_id FROM transakcje WHERE id = ?',
+        [transakcjaId]
+      );
+      
+      if (transakcja.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Transakcja nie znaleziona' }));
+        await connection.end();
+        return;
+      }
+      
+      if (transakcja[0].zamowienie_id !== null) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Nie można usunąć transakcji powiązanej z zamówieniem. Edytuj zamówienie w POZ.' }));
+        await connection.end();
+        return;
+      }
+      
+      // Usuń transakcję manualną
+      await connection.execute('DELETE FROM transakcje WHERE id = ?', [transakcjaId]);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: true }));
+      await connection.end();
+      
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: error.message }));
+      if (connection) await connection.end();
+    }
+    return;
+  }
+  
+  // GET /api/transakcje/:id - pobierz szczegóły transakcji
+  if (req.method === 'GET' && pathname.startsWith('/api/transakcje/')) {
+    const transakcjaId = pathname.split('/')[3];
+    let connection;
+    try {
+      connection = await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'Pepperoni13',
+        database: 'SmartPizzApp13'
+      });
+      const [rows] = await connection.query(
+        'SELECT * FROM transakcje WHERE id = ?',
+        [transakcjaId]
+      );
+      
+      if (rows.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Transakcja nie znaleziona' }));
+      } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(rows[0]));
+      }
+      await connection.end();
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
+      if (connection) await connection.end();
+    }
+    return;
+  }
+  
+  // PUT /api/transakcje/:id - aktualizuj transakcję manualną
+  if (req.method === 'PUT' && pathname.startsWith('/api/transakcje/')) {
+    const transakcjaId = pathname.split('/')[3];
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      let connection;
+      try {
+        const data = JSON.parse(body);
+        connection = await mysql.createConnection({
+          host: 'localhost',
+          user: 'root',
+          password: 'Pepperoni13',
+          database: 'SmartPizzApp13'
+        });
+        
+        // Sprawdź czy transakcja istnieje i czy jest manualna
+        const [existing] = await connection.query(
+          'SELECT zamowienie_id FROM transakcje WHERE id = ?',
+          [transakcjaId]
+        );
+        
+        if (existing.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Transakcja nie znaleziona' }));
+          await connection.end();
+          return;
+        }
+        
+        if (existing[0].zamowienie_id !== null) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Nie można edytować transakcji powiązanej z zamówieniem. Edytuj zamówienie w POZ.' }));
+          await connection.end();
+          return;
+        }
+        
+        // Dla transakcji manualnych zawsze ustaw formę płatności jako 'manualny'
+        const formaPlat = 'manualny';
+        
+        // Aktualizuj transakcję
+        await connection.query(
+          `UPDATE transakcje 
+           SET typ = ?, kwota = ?, forma_platnosci = ?, opis = ?
+           WHERE id = ?`,
+          [data.typ, data.kwota, formaPlat, data.opis, transakcjaId]
+        );
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Transakcja zaktualizowana' }));
+        await connection.end();
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+        if (connection) await connection.end();
+      }
+    });
+    return;
+  }
+  
+  // DELETE /api/transakcje/:id - usuń transakcję manualną
+  if (req.method === 'DELETE' && pathname.startsWith('/api/transakcje/')) {
+    const transakcjaId = pathname.split('/')[3];
+    let connection;
+    try {
+      connection = await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'Pepperoni13',
+        database: 'SmartPizzApp13'
+      });
+      
+      // Sprawdź czy transakcja jest manualna (nie ma zamowienie_id)
+      const [rows] = await connection.query(
+        'SELECT zamowienie_id FROM transakcje WHERE id = ?',
+        [transakcjaId]
+      );
+      
+      if (rows.length === 0) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Transakcja nie znaleziona' }));
+        await connection.end();
+        return;
+      }
+      
+      if (rows[0].zamowienie_id !== null) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Nie można usunąć transakcji powiązanej z zamówieniem' }));
+        await connection.end();
+        return;
+      }
+      
+      // Usuń transakcję manualną
+      await connection.query('DELETE FROM transakcje WHERE id = ?', [transakcjaId]);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'Transakcja została usunięta' }));
+      await connection.end();
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: error.message }));
       if (connection) await connection.end();
     }
@@ -1092,7 +2304,7 @@ const server = http.createServer(async (req, res) => {
                   const pizza1 = bracketsMatch[1].trim().toUpperCase();
                   const mods1 = bracketsMatch[2].trim();
                   
-                  const key = pizza1Nazwa + ' / ' + pizza2Nazwa;
+                  const key = pizza1Nazwa + '|' + pizza2Nazwa;
                   if (!modyfikacjeMap[key]) {
                     modyfikacjeMap[key] = { isPolNaPol: true, left: null, right: null };
                   }
@@ -1122,7 +2334,7 @@ const server = http.createServer(async (req, res) => {
                   const pizza1 = bracketsMatch[1].trim().toUpperCase();
                   const mods1 = bracketsMatch[2].trim();
                   
-                  const key = pizza1Nazwa + ' / ' + pizza2Nazwa;
+                  const key = pizza1Nazwa + '|' + pizza2Nazwa;
                   if (!modyfikacjeMap[key]) {
                     modyfikacjeMap[key] = { isPolNaPol: true, left: null, right: null };
                   }
@@ -1136,7 +2348,7 @@ const server = http.createServer(async (req, res) => {
                   console.log('[ORDER #' + order.id + '] Pol na pol (nowy format) parsed: key=' + key);
                 } else {
                   // Stary format bez nawiasów - wszystkie modyfikacje dla pierwszej pizzy
-                  const key = pizza1Nazwa + ' / ' + pizza2Nazwa;
+                  const key = pizza1Nazwa + '|' + pizza2Nazwa;
                   if (!modyfikacjeMap[key]) {
                     modyfikacjeMap[key] = { isPolNaPol: true, left: null, right: null };
                   }
@@ -1150,21 +2362,25 @@ const server = http.createServer(async (req, res) => {
               const polNaPolFullMatch = line.match(/^(.+?):\\s*\\[(.+?):\\s*(.+?)\\](?:\\s*\\[(.+?):\\s*(.+?)\\])?$/i);
               if (polNaPolFullMatch) {
                 console.log('[ORDER #' + order.id + '] Znaleziono pol na pol full format');
-                const fullNazwa = polNaPolFullMatch[1].trim();
+                const fullNazwa = polNaPolFullMatch[1].trim().toUpperCase();
                 const pizza1 = polNaPolFullMatch[2].trim().toUpperCase();
                 const mods1 = polNaPolFullMatch[3].trim();
                 
-                if (!modyfikacjeMap[fullNazwa]) {
-                  modyfikacjeMap[fullNazwa] = { isPolNaPol: true, left: null, right: null };
+                // Użyj kombinacji obu nazw jako klucza
+                const pizza2Name = polNaPolFullMatch[4] ? polNaPolFullMatch[4].trim().toUpperCase() : '';
+                const uniqueKey = pizza1 + '|' + pizza2Name;
+                
+                if (!modyfikacjeMap[uniqueKey]) {
+                  modyfikacjeMap[uniqueKey] = { isPolNaPol: true, left: null, right: null, fullName: fullNazwa };
                 }
-                modyfikacjeMap[fullNazwa].left = { name: pizza1, mods: mods1 };
+                modyfikacjeMap[uniqueKey].left = { name: pizza1, mods: mods1 };
                 
                 if (polNaPolFullMatch[4] && polNaPolFullMatch[5]) {
-                  const pizza2 = polNaPolFullMatch[4].trim().toUpperCase();
+                  const pizza2 = pizza2Name;
                   const mods2 = polNaPolFullMatch[5].trim();
-                  modyfikacjeMap[fullNazwa].right = { name: pizza2, mods: mods2 };
+                  modyfikacjeMap[uniqueKey].right = { name: pizza2, mods: mods2 };
                 }
-                console.log('[ORDER #' + order.id + '] Pol na pol full parsed: key=' + fullNazwa);
+                console.log('[ORDER #' + order.id + '] Pol na pol full parsed: key=' + uniqueKey);
                 return;
               }
               
@@ -1205,25 +2421,23 @@ const server = http.createServer(async (req, res) => {
                 // Nazwa pizzy pół na pół
                 const polNaPolName = pizzaName + ' / ' + pizza2Name + ' (pół na pół)';
                 
-                // Znajdź modyfikacje dla obu stron
+                // Znajdź modyfikacje dla obu stron - używamy klucza PIZZA1|PIZZA2
                 let modsArray = [];
                 
                 const pizzaNazwa1Upper = pizzaName.toUpperCase();
                 const pizzaNazwa2Upper = pizza2Name.toUpperCase();
+                const searchKey = pizzaNazwa1Upper + '|' + pizzaNazwa2Upper;
                 
-                for (const key in modyfikacjeMap) {
-                  const mapEntry = modyfikacjeMap[key];
-                  if (mapEntry.isPolNaPol) {
-                    if (mapEntry.left && mapEntry.left.name.toUpperCase() === pizzaNazwa1Upper) {
-                      modsArray.push(pizzaName.toUpperCase() + ': ' + mapEntry.left.mods);
-                      // Oznacz tę modyfikację jako użytą
-                      usedPolNaPolMods.add(key + '_left');
-                    }
-                    if (mapEntry.right && mapEntry.right.name.toUpperCase() === pizzaNazwa2Upper) {
-                      modsArray.push(pizza2Name.toUpperCase() + ': ' + mapEntry.right.mods);
-                      // Oznacz tę modyfikację jako użytą
-                      usedPolNaPolMods.add(key + '_right');
-                    }
+                console.log('[KUCHNIA] Szukam modyfikacji dla klucza: ' + searchKey);
+                
+                // Sprawdź czy jest wpis z tym kluczem
+                if (modyfikacjeMap[searchKey]) {
+                  const mapEntry = modyfikacjeMap[searchKey];
+                  if (mapEntry.left && mapEntry.left.mods) {
+                    modsArray.push(pizzaName.toUpperCase() + ': ' + mapEntry.left.mods);
+                  }
+                  if (mapEntry.right && mapEntry.right.mods) {
+                    modsArray.push(pizza2Name.toUpperCase() + ': ' + mapEntry.right.mods);
                   }
                 }
                 
@@ -1231,8 +2445,13 @@ const server = http.createServer(async (req, res) => {
                   ? '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + modsArray.join('; ') + '</div>'
                   : '';
                 
+                // Sprawdź czy pizza jest za kupony
+                const kuponyHtml = pizza.isKupony 
+                  ? '<span style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 4px 12px; border-radius: 6px; font-size: 0.85em; font-weight: 700; margin-left: 10px; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);">🎟️ ZA KUPONY</span>'
+                  : '';
+                
                 return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05);">' +
-                  '<div style="font-weight: 700; color: hsl(25 95% 53%); font-size: 1.4em; margin-bottom: 4px;">' + polNaPolName + ' - ' + pizza.rozmiar + '</div>' +
+                  '<div style="font-weight: 700; color: hsl(25 95% 53%); font-size: 1.4em; margin-bottom: 4px;">' + polNaPolName + ' - ' + pizza.rozmiar + kuponyHtml + '</div>' +
                   modsHtml +
                 '</div>';
               }
@@ -1335,7 +2554,12 @@ const server = http.createServer(async (req, res) => {
                 modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;">- ' + usunietaNazwy.join(', ') + '</div>';
               }
               
-              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.3em;">' + pizzaName2 + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span></div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
+              // Sprawdź czy pizza jest za kupony
+              const kuponyBadge = pizza.isKupony 
+                ? '<span style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.75em; font-weight: 700; margin-left: 8px; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3); vertical-align: middle;">🎟️ ZA KUPONY</span>'
+                : '';
+              
+              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.3em;">' + pizzaName2 + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span>' + kuponyBadge + '</div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
             }).join('');
           } catch (e) {
             console.error('Blad parsowania pizze:', e);
@@ -1959,7 +3183,7 @@ const server = http.createServer(async (req, res) => {
                   const pizza1Name = mixedPolNaPolMatch[1].trim();
                   const pizza2Name = mixedPolNaPolMatch[2].trim();
                   const modsString = mixedPolNaPolMatch[3].trim();
-                  const fullPizzaName = pizza1Name + ' / ' + pizza2Name;
+                  const fullPizzaName = pizza1Name + '|' + pizza2Name;
                   
                   // Sprawdź czy są nawiasy kwadratowe w modyfikacjach
                   const bracketsMatch = modsString.match(/\\[(.+?):\\s*(.+?)\\](?:\\s*\\[(.+?):\\s*(.+?)\\])?/);
@@ -2065,8 +3289,13 @@ const server = http.createServer(async (req, res) => {
                   ? '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 6px 10px; border-radius: 6px; font-size: 1.3em; font-weight: 700; margin-top: 6px; line-height: 1.4;">' + modsArray.join('; ') + '</div>'
                   : '';
                 
+                // Sprawdź czy pizza jest za kupony
+                const kuponyHtml = pizza.isKupony 
+                  ? '<span style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 4px 12px; border-radius: 6px; font-size: 0.85em; font-weight: 700; margin-left: 10px; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);">🎟️ ZA KUPONY</span>'
+                  : '';
+                
                 return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05);">' +
-                  '<div style="font-weight: 700; color: hsl(25 95% 53%); font-size: 1.4em; margin-bottom: 4px;">' + polNaPolName + ' - ' + pizza.rozmiar + '</div>' +
+                  '<div style="font-weight: 700; color: hsl(25 95% 53%); font-size: 1.4em; margin-bottom: 4px;">' + polNaPolName + ' - ' + pizza.rozmiar + kuponyHtml + '</div>' +
                   modsHtml +
                 '</div>';
               }
@@ -2169,7 +3398,12 @@ const server = http.createServer(async (req, res) => {
                 modyfikacjeHtml = '<div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 8px 14px; border-radius: 8px; font-size: 1.3em; font-weight: 600; line-height: 1.5; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); max-width: 200px; word-wrap: break-word;">- ' + usunietaNazwy.join(', ') + '</div>';
               }
               
-              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.3em;">' + pizzaName2 + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span></div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
+              // Sprawdź czy pizza jest za kupony
+              const kuponyBadge = pizza.isKupony 
+                ? '<span style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.75em; font-weight: 700; margin-left: 8px; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3); vertical-align: middle;">🎟️ ZA KUPONY</span>'
+                : '';
+              
+              return '<div style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 14px 18px; margin: 8px 0; border-radius: 10px; border-left: 4px solid hsl(25 95% 53%); box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;"><div style="flex: 1;"><div><span style="font-weight: 700; color: #1f2937; font-size: 1.3em;">' + pizzaName2 + '</span><span style="color: #6b7280; font-size: 0.9em; margin-left: 10px; font-weight: 600;">[' + pizza.rozmiar + ']</span>' + kuponyBadge + '</div>' + skladnikiHtml + '</div>' + modyfikacjeHtml + '</div>';
             }).join('');
           } catch (e) {
             console.error('Błąd parsowania pizze:', e);
@@ -3146,6 +4380,15 @@ const server = http.createServer(async (req, res) => {
       margin-bottom: 8px;
       font-weight: 500;
     }
+    /* Ukryj strzałki w polach numerycznych */
+    input.edit-input::-webkit-outer-spin-button,
+    input.edit-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input.edit-input[type=number] {
+      -moz-appearance: textfield;
+    }
     input.edit-input:focus {
       outline: none;
       border-color: hsl(25 95% 53%);
@@ -3337,12 +4580,17 @@ const server = http.createServer(async (req, res) => {
     function typeKey(key) {
       if (!activeInput) return;
       
-      const start = activeInput.selectionStart;
-      const end = activeInput.selectionEnd;
+      const start = activeInput.selectionStart || activeInput.value.length;
+      const end = activeInput.selectionEnd || activeInput.value.length;
       const value = activeInput.value;
       
-      activeInput.value = value.substring(0, start) + key + value.substring(end);
-      activeInput.selectionStart = activeInput.selectionEnd = start + 1;
+      // Wstaw znak w pozycji kursora
+      const newValue = value.substring(0, start) + key + value.substring(end);
+      activeInput.value = newValue;
+      
+      // Ustaw kursor zaraz po wstawionym znaku
+      const newPos = start + key.length;
+      activeInput.setSelectionRange(newPos, newPos);
       activeInput.focus();
     }
     
@@ -3433,7 +4681,7 @@ const server = http.createServer(async (req, res) => {
       
       // Edycja ceny
       priceCell.innerHTML = \`
-        <input type="number" id="price-input-\${orderId}" class="edit-input" value="\${currentPrice}" step="0.01" min="0">
+        <input type="text" id="price-input-\${orderId}" class="edit-input" value="\${currentPrice}" inputmode="decimal" pattern="[0-9]*\\.?[0-9]*">
       \`;
       
       // Edycja płatności
@@ -3443,6 +4691,7 @@ const server = http.createServer(async (req, res) => {
       paymentSelect.innerHTML = \`
         <option value="gotowka" \${currentPayment === 'gotowka' ? 'selected' : ''}>Gotówka</option>
         <option value="karta" \${currentPayment === 'karta' ? 'selected' : ''}>Karta</option>
+        <option value="online" \${currentPayment === 'online' ? 'selected' : ''}>Online</option>
       \`;
       paymentCell.innerHTML = '';
       paymentCell.appendChild(paymentSelect);
@@ -3451,12 +4700,18 @@ const server = http.createServer(async (req, res) => {
       const kierowcaSelect = document.createElement('select');
       kierowcaSelect.id = 'kierowca-select-' + orderId;
       kierowcaSelect.className = 'payment-select';
-      kierowcaSelect.innerHTML = '<option value="-1">-- Brak --</option>';
       
       // Pobierz aktywne sesje dla dropdownu kierowców
       fetch('/api/sesje/aktywne')
         .then(res => res.json())
         .then(sesje => {
+          // Jeśli więcej niż jedna sesja, dodaj opcję "Wybierz kierowcę"
+          if (sesje.length > 1) {
+            kierowcaSelect.innerHTML = '<option value="-1">Wybierz kierowcę</option>';
+          } else {
+            kierowcaSelect.innerHTML = '<option value="-1">-- Brak --</option>';
+          }
+          
           sesje.forEach(sesja => {
             const selected = currentSesjaId === sesja.id ? 'selected' : '';
             kierowcaSelect.innerHTML += \`<option value="\${sesja.id}" \${selected}>\${sesja.kierowca_nazwa}</option>\`;
@@ -3494,6 +4749,14 @@ const server = http.createServer(async (req, res) => {
         priceInput.addEventListener('focus', function() {
           activeInput = this;
           showKeyboard();
+        });
+        
+        // Przesuń kursor na koniec przy każdym kliknięciu
+        priceInput.addEventListener('click', function() {
+          setTimeout(() => {
+            const len = this.value.length;
+            this.setSelectionRange(len, len);
+          }, 10);
         });
         
         // Pokaż klawiaturę i ustaw focus na telefon
@@ -3712,6 +4975,9 @@ const server = http.createServer(async (req, res) => {
       <button class="apply-btn" onclick="window.location.href='/sesja'" style="background: linear-gradient(135deg, hsl(25 95% 53%) 0%, hsl(25 95% 45%) 100%); box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4); padding: 16px 28px; font-size: 15px;">
         Sesja
       </button>
+      <button class="apply-btn" onclick="window.location.href='/rozliczenie'" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); padding: 16px 28px; font-size: 15px;">
+        Rozliczenie Pizzerii
+      </button>
     </div>
   
   <div class="filters-container">
@@ -3760,7 +5026,7 @@ const server = http.createServer(async (req, res) => {
         <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll()" title="Zaznacz wszystkie">
       </th>
       <th style="width: 100px;">Typ</th>
-      <th style="width: 120px;">Telefon</th>
+      <th style="width: 150px;">Telefon</th>
       <th style="width: 180px;">Adres</th>
       <th style="width: 220px;">Pizze</th>
       <th style="width: 160px;">Modyfikacje</th>
@@ -3772,7 +5038,7 @@ const server = http.createServer(async (req, res) => {
       <th style="width: 120px;">Płatność</th>
       <th style="width: 110px;">Kierowca</th>
       <th style="width: 150px;">Data</th>
-      <th style="width: 180px;">Akcje</th>
+      <th style="width: 240px;">Akcje</th>
     </tr>
     ${orders.map((order, i) => `
     <tr id="row-${order.id}" style="vertical-align: top;">

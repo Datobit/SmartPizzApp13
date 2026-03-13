@@ -349,9 +349,13 @@ export const pizzaRouter = createTRPCRouter({
         }
       }
 
-      // Cena sosów - jeśli jakakolwiek pizza jest za kupony, to 3 PLN, w przeciwnym razie 2 PLN
+      // Cena sosów - zależy od składu zamówienia:
+      // - Jeśli WSZYSTKIE pizze są za kupony -> 3 PLN
+      // - Jeśli jest MIX (kupony + normalne) lub tylko normalne -> 2 PLN
       const maKuponyPizza = input.pizze.some(p => p.isKupony);
-      const cenaSosu = maKuponyPizza ? 3 : 2;
+      const maNomalPizza = input.pizze.some(p => !p.isKupony);
+      const tylkoKupony = maKuponyPizza && !maNomalPizza;
+      const cenaSosu = tylkoKupony ? 3 : 2;
       totalPrice += (input.sosy.pom + input.sosy.czos) * cenaSosu;
 
       // Cena napojów
@@ -606,9 +610,13 @@ export const pizzaRouter = createTRPCRouter({
           }
         }
 
-        // Cena sosów - jeśli jakakolwiek pizza jest za kupony, to 3 PLN, w przeciwnym razie 2 PLN
+        // Cena sosów - zależy od składu zamówienia:
+        // - Jeśli WSZYSTKIE pizze są za kupony -> 3 PLN
+        // - Jeśli jest MIX (kupony + normalne) lub tylko normalne -> 2 PLN
         const maKuponyPizza = input.pizze.some(p => p.isKupony);
-        const cenaSosu = maKuponyPizza ? 3 : 2;
+        const maNomalPizza = input.pizze.some(p => !p.isKupony);
+        const tylkoKupony = maKuponyPizza && !maNomalPizza;
+        const cenaSosu = tylkoKupony ? 3 : 2;
         totalPrice += (input.sosy.pom + input.sosy.czos) * cenaSosu;
 
         // Cena napojów
@@ -722,14 +730,19 @@ export const pizzaRouter = createTRPCRouter({
       
       console.log("Zamówienie zapisane pomyślnie:", insertResult);
       
+      // Pobierz ID wstawionego zamówienia
+      const zamowienieIdResult = await db.$queryRaw<Array<{ id: number }>>`SELECT LAST_INSERT_ID() as id`;
+      const zamowienieId = zamowienieIdResult[0]?.id || 0;
+      console.log("ID nowego zamówienia:", zamowienieId);
+      
       // Jeśli przypisano do sesji i typ to dowóz, dodaj transakcję
       if (input.sesjaId && input.typZamowienia === 'dowoz') {
         console.log(`Dodaję transakcję ${priceResult} PLN do sesji ${input.sesjaId} (${input.platnosc})`);
         try {
           // Dla gotówki - wpływ, dla karty i online - wpływ ale nie wliczane do salda (forma_platnosci = karta/online)
           await db.$executeRaw`
-            INSERT INTO transakcje (sesja_id, typ, kwota, forma_platnosci, opis)
-            VALUES (${input.sesjaId}, 'wplyw', ${priceResult}, ${input.platnosc}, ${`Zamówienie - ${input.adres}`})
+            INSERT INTO transakcje (sesja_id, zamowienie_id, typ, kwota, forma_platnosci, opis)
+            VALUES (${input.sesjaId}, ${zamowienieId}, 'wplyw', ${priceResult}, ${input.platnosc}, ${`Zamówienie - ${input.adres}`})
           `;
           console.log("Transakcja dodana pomyślnie");
         } catch (error) {
@@ -739,7 +752,7 @@ export const pizzaRouter = createTRPCRouter({
 
       return {
         success: true,
-        zamowienieId: Date.now(), // Używamy timestamp jako ID
+        zamowienieId: zamowienieId,
         cenaCalkwita: priceResult,
       };
     }),

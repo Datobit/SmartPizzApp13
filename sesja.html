@@ -767,6 +767,8 @@
     </div>
   </div>
   
+
+
   <script>
     let kierowcy = [];
     let aktywneSesje = [];
@@ -836,7 +838,7 @@
               Saldo: ${saldo.toFixed(2)} PLN
             </div>
             <div class="transakcja-form">
-              <input type="number" id="kwota_${sesja.id}" placeholder="Kwota (PLN)" step="0.01" onfocus="setActiveInput(this)">
+              <input type="text" inputmode="decimal" pattern="[0-9]*\.?[0-9]*" id="kwota_${sesja.id}" placeholder="Kwota (PLN)" onfocus="setActiveInput(this)">
               <input type="text" id="opis_${sesja.id}" placeholder="Opis transakcji" onfocus="setActiveInput(this)">
               <div class="transakcja-buttons">
                 <button class="btn-wplyw" onclick="dodajTransakcje(${sesja.id}, 'wplyw')">
@@ -937,54 +939,95 @@
             <p style="text-align: center; color: #9ca3af; font-size: 0.85em;">Brak transakcji</p>
           `;
         } else {
-          // Pokaż wszystkie transakcje (najnowsze na górze)
+          // Pokaż wszystkie transakcje i zamówienia (najnowsze na górze)
           const wszystkie = transakcje.slice().reverse();
           
           let html = `<h4 style="color: #374151; margin-bottom: 12px; font-size: 0.9em;">Wszystkie transakcje (${transakcje.length}):</h4>`;
-          html += '<table style="font-size: 0.85em;"><thead><tr><th>Data</th><th>Typ</th><th>Kwota</th><th>Forma</th><th>Opis</th></tr></thead><tbody>';
+          html += '<table style="font-size: 0.85em;"><thead><tr><th>Data</th><th>Typ</th><th>Kwota</th><th>Forma</th><th>Opis</th><th>Akcje</th></tr></thead><tbody>';
           
-          wszystkie.forEach(t => {
-            const data = new Date(t.data_utworzenia).toLocaleString('pl-PL', {
-              day: '2-digit',
-              month: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit'
-            });
-            const kwota = parseFloat(t.kwota).toFixed(2);
-            // Poprawka: sprawdzaj dokładnie wartość forma_platnosci
-            const formaPlatnosci = t.forma_platnosci ? t.forma_platnosci.toLowerCase() : 'manualny';
-            let typ = '';
-            let className = '';
-            
-            // Transakcje z kartą i online - czarna czcionka, nie wlicza się do salda
-            if (formaPlatnosci === 'karta' || formaPlatnosci === 'online') {
-              typ = t.typ === 'wplyw' ? `Wpływ (${formaPlatnosci})` : `Wydatek (${formaPlatnosci})`;
-              className = '';
+          wszystkie.forEach(item => {
+            // Jeśli to zamówienie online
+            if (item.typ === 'zamowienie_online') {
+              const z = item.zamowienie;
+              const data = new Date(z.created_at).toLocaleString('pl-PL', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+              const kwota = parseFloat(z.cena_calkowita).toFixed(2);
+              
+              html += `
+                <tr>
+                  <td>${data}</td>
+                  <td>Wpływ (online)</td>
+                  <td>${kwota} PLN</td>
+                  <td>Online</td>
+                  <td>Zamówienie - ${z.adres || z.telefon}</td>
+                  <td><a href="http://localhost:3000/poz" target="_blank" style="color: hsl(25 95% 53%); text-decoration: none; font-weight: 600;">📋 Otwórz POZ</a></td>
+                </tr>
+              `;
             }
-            // Transakcje z gotówką - zielona czcionka, wlicza się do salda
-            else if (formaPlatnosci === 'gotowka') {
-              typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
-              className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
+            // Jeśli to transakcja
+            else if (item.typ === 'transakcja') {
+              const t = item.transakcja;
+              const data = new Date(t.data_utworzenia).toLocaleString('pl-PL', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+              const kwota = parseFloat(t.kwota).toFixed(2);
+              const formaPlatnosci = t.forma_platnosci ? t.forma_platnosci.toLowerCase() : 'manualny';
+              let typ = '';
+              let className = '';
+              
+              // Transakcje z kartą i online - czarna czcionka, nie wlicza się do salda
+              if (formaPlatnosci === 'karta' || formaPlatnosci === 'online') {
+                typ = t.typ === 'wplyw' ? `Wpływ (${formaPlatnosci})` : `Wydatek (${formaPlatnosci})`;
+                className = '';
+              }
+              // Transakcje z gotówką - zielona czcionka, wlicza się do salda
+              else if (formaPlatnosci === 'gotowka') {
+                typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
+                className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
+              }
+              // Transakcje manualne - standardowe kolory
+              else {
+                typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
+                className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
+              }
+              
+              const formaLabel = formaPlatnosci === 'gotowka' ? 'Gotówka' : 
+                                formaPlatnosci === 'karta' ? 'Karta' :
+                                formaPlatnosci === 'online' ? 'Online' : 'Manualny';
+              
+              // Określ akcje - edycja tylko dla transakcji bez zamowienie_id (manualnych)
+              let akcje = '';
+              if (t.zamowienie_id) {
+                // Transakcja z zamówieniem - link do POZ
+                akcje = `<a href="http://localhost:3000/poz" target="_blank" style="color: hsl(25 95% 53%); text-decoration: none; font-weight: 600;">📋 Edytuj w POZ</a>`;
+              } else {
+                // Transakcja manualna - przyciski edycji i usunięcia (każdy zajmuje 50% szerokości)
+                akcje = `
+                  <div style="display: flex; width: 100%; height: 100%; gap: 0;">
+                    <button onclick="editTransakcja(${t.id})" style="flex: 1; background: #3b82f6; color: white; border: none; padding: 12px 6px; cursor: pointer; font-size: 1em; border-right: 1px solid #1e40af;">✏️ Edytuj</button>
+                    <button onclick="deleteTransakcja(${t.id})" style="flex: 1; background: #ef4444; color: white; border: none; padding: 12px 6px; cursor: pointer; font-size: 1em;">🗑️ Usuń</button>
+                  </div>
+                `;
+              }
+              
+              html += `
+                <tr data-transakcja-id="${t.id}">
+                  <td>${data}</td>
+                  <td class="${className}">${typ}</td>
+                  <td class="${className}">${kwota} PLN</td>
+                  <td>${formaLabel}</td>
+                  <td>${t.opis || '-'}</td>
+                  <td>${akcje}</td>
+                </tr>
+              `;
             }
-            // Transakcje manualne - standardowe kolory
-            else {
-              typ = t.typ === 'wplyw' ? 'Wpływ' : 'Wydatek';
-              className = t.typ === 'wplyw' ? 'wplyw' : 'wydatek';
-            }
-            
-            const formaLabel = formaPlatnosci === 'gotowka' ? 'Gotówka' : 
-                              formaPlatnosci === 'karta' ? 'Karta' :
-                              formaPlatnosci === 'online' ? 'Online' : 'Manualny';
-            
-            html += `
-              <tr>
-                <td>${data}</td>
-                <td class="${className}">${typ}</td>
-                <td class="${className}">${kwota} PLN</td>
-                <td>${formaLabel}</td>
-                <td>${t.opis || '-'}</td>
-              </tr>
-            `;
           });
           
           html += '</tbody></table>';
@@ -1515,6 +1558,207 @@
       
       if (textKeyboard) textKeyboard.style.display = 'block';
       if (numericKeyboard) numericKeyboard.style.display = 'none';
+    }
+    
+    // Funkcje edycji i usuwania transakcji manualnych
+    let editingTransakcjaId = null;
+    let editingTransakcjaData = null;
+    let selectedTyp = 'wydatek';
+    let selectedFormaPayment = 'gotowka';
+    
+    async function editTransakcja(transakcjaId) {
+      try {
+        // Pobierz dane transakcji
+        const res = await fetch(`/api/transakcje/${transakcjaId}`);
+        if (!res.ok) throw new Error('Nie można pobrać danych transakcji');
+        
+        const transakcja = await res.json();
+        
+        // Sprawdź czy to transakcja manualna
+        if (transakcja.zamowienie_id) {
+          alert('Ta transakcja jest powiązana z zamówieniem. Edytuj ją w POZ.');
+          return;
+        }
+        
+        // Zamknij poprzednią edycję jeśli istnieje
+        if (editingTransakcjaId) {
+          cancelEditTransakcja();
+        }
+        
+        editingTransakcjaId = transakcjaId;
+        editingTransakcjaData = transakcja;
+        
+        // Znajdź wiersz i dodaj wiersze edycji
+        const row = document.querySelector(`tr[data-transakcja-id="${transakcjaId}"]`);
+        if (!row) return;
+        
+        const editRow1 = document.createElement('tr');
+        editRow1.className = 'edit-row';
+        editRow1.innerHTML = `
+          <td colspan="2" style="border: 2px solid hsl(25 95% 53%); border-right: none; border-bottom: 2px solid hsl(25 95% 53%); padding: 12px; vertical-align: top;">
+            <button id="btn-wplyw" onclick="selectTyp('wplyw')" style="width: 100%; padding: 16px; margin-bottom: 8px; border: 2px solid #d1d5db; background: white; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: all 0.2s;">
+              Wpływ
+            </button>
+            <button id="btn-wydatek" onclick="selectTyp('wydatek')" style="width: 100%; padding: 16px; border: 2px solid #d1d5db; background: white; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: all 0.2s;">
+              Wydatek
+            </button>
+          </td>
+          <td style="border-top: 2px solid hsl(25 95% 53%); border-bottom: 2px solid hsl(25 95% 53%); padding: 12px;">
+            <input type="text" inputmode="decimal" pattern="[0-9]*\.?[0-9]*" id="edit-kwota-inline" 
+              value="${parseFloat(transakcja.kwota)}" 
+              style="width: 100%; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 16px; transition: all 0.2s; box-sizing: border-box;"
+              onfocus="setActiveInput(this); this.style.borderColor='#3b82f6'; this.style.outline='none';"
+              onblur="this.style.borderColor='#d1d5db';" />
+          </td>
+          <td colspan="2" style="border-top: 2px solid hsl(25 95% 53%); border-bottom: 2px solid hsl(25 95% 53%); padding: 12px;">
+            <textarea id="edit-opis-inline" rows="4" 
+              style="width: 100%; padding: 12px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 16px; resize: vertical; transition: all 0.2s; box-sizing: border-box;"
+              onfocus="setActiveInput(this); this.style.borderColor='#3b82f6'; this.style.outline='none';"
+              onblur="this.style.borderColor='#d1d5db';">${transakcja.opis || ''}</textarea>
+          </td>
+          <td style="border: 2px solid hsl(25 95% 53%); border-left: none; border-bottom: 2px solid hsl(25 95% 53%); padding: 12px; vertical-align: top;">
+            <button onclick="saveEditedTransakcja()" style="width: 100%; padding: 16px; margin-bottom: 8px; background: #22c55e; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: all 0.2s;">
+              Zapisz
+            </button>
+            <button onclick="cancelEditTransakcja()" style="width: 100%; padding: 16px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: all 0.2s;">
+              Anuluj
+            </button>
+          </td>
+        `;
+        
+        row.after(editRow1);
+        
+        // Ukryj przyciski edycji/usuń w oryginalnym wierszu
+        row.style.display = 'none';
+        
+        // Ustaw wybór typu
+        selectTyp(transakcja.typ);
+        
+      } catch (error) {
+        alert('Błąd: ' + error.message);
+      }
+    }
+    
+    function selectTyp(typ) {
+      selectedTyp = typ;
+      const btnWplyw = document.getElementById('btn-wplyw');
+      const btnWydatek = document.getElementById('btn-wydatek');
+      
+      if (typ === 'wplyw') {
+        btnWplyw.style.background = 'hsl(25 95% 53%)';
+        btnWplyw.style.color = 'white';
+        btnWplyw.style.borderColor = 'hsl(25 95% 53%)';
+        btnWydatek.style.background = 'white';
+        btnWydatek.style.color = 'black';
+        btnWydatek.style.borderColor = '#d1d5db';
+      } else {
+        btnWydatek.style.background = 'hsl(25 95% 53%)';
+        btnWydatek.style.color = 'white';
+        btnWydatek.style.borderColor = 'hsl(25 95% 53%)';
+        btnWplyw.style.background = 'white';
+        btnWplyw.style.color = 'black';
+        btnWplyw.style.borderColor = '#d1d5db';
+      }
+    }
+    
+    function selectForma(forma) {
+      selectedFormaPayment = forma;
+      const btnGotowka = document.getElementById('btn-gotowka');
+      const btnKarta = document.getElementById('btn-karta');
+      
+      // Reset wszystkich przycisków
+      [btnGotowka, btnKarta].forEach(btn => {
+        if (btn) {
+          btn.style.background = 'white';
+          btn.style.color = 'black';
+          btn.style.borderColor = '#d1d5db';
+        }
+      });
+      
+      // Podświetl wybrany
+      let selectedBtn;
+      if (forma === 'gotowka') selectedBtn = btnGotowka;
+      else if (forma === 'karta') selectedBtn = btnKarta;
+      
+      if (selectedBtn) {
+        selectedBtn.style.background = 'hsl(25 95% 53%)';
+        selectedBtn.style.color = 'white';
+        selectedBtn.style.borderColor = 'hsl(25 95% 53%)';
+      }
+    }
+    
+    function cancelEditTransakcja() {
+      if (!editingTransakcjaId) return;
+      
+      // Usuń wiersze edycji
+      document.querySelectorAll('.edit-row').forEach(row => row.remove());
+      
+      // Pokaż oryginalny wiersz
+      const originalRow = document.querySelector(`tr[data-transakcja-id="${editingTransakcjaId}"]`);
+      if (originalRow) {
+        originalRow.style.display = '';
+      }
+      
+      editingTransakcjaId = null;
+      editingTransakcjaData = null;
+    }
+    
+    async function saveEditedTransakcja() {
+      if (!editingTransakcjaId) return;
+      
+      // Pobierz wybrany typ ze zmiennej
+      const typ = selectedTyp;
+      
+      const kwota = parseFloat(document.getElementById('edit-kwota-inline').value);
+      
+      // Forma płatności - zawsze 'manualny' dla transakcji manualnych
+      const forma = 'manualny';
+      
+      const opis = document.getElementById('edit-opis-inline').value;
+      
+      if (!kwota || kwota <= 0) {
+        alert('Kwota musi być większa od 0');
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/transakcje/${editingTransakcjaId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ typ, kwota, forma_platnosci: forma, opis })
+        });
+        
+        if (res.ok) {
+          location.reload();
+        } else {
+          const error = await res.json();
+          alert('Błąd: ' + error.message);
+        }
+      } catch (error) {
+        alert('Błąd: ' + error.message);
+      }
+    }
+    
+    async function deleteTransakcja(transakcjaId) {
+      if (!confirm('Czy na pewno chcesz usunąć tę transakcję?')) {
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/transakcje/${transakcjaId}`, {
+          method: 'DELETE'
+        });
+        
+        if (res.ok) {
+          alert('Transakcja została usunięta');
+          location.reload();
+        } else {
+          const error = await res.json();
+          alert('Błąd usuwania transakcji: ' + error.message);
+        }
+      } catch (error) {
+        alert('Błąd: ' + error.message);
+      }
     }
   </script>
   
