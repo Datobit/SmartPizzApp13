@@ -37,6 +37,13 @@ interface OrderData {
   platnosc: "gotowka" | "karta" | "online";
 }
 
+interface LicenseStatusData {
+  locked: boolean;
+  monthKey: string;
+  dueDateLabel: string;
+  reason?: string | null;
+}
+
 export default function Home() {
   // Typ zamówienia
   const [typZamowienia, setTypZamowienia] = useState<"na_miejscu" | "na_wynos" | "dowoz">("dowoz");
@@ -88,6 +95,17 @@ export default function Home() {
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [lastSelectedStreet, setLastSelectedStreet] = useState<string>("");
   const [isSelectingFromList, setIsSelectingFromList] = useState(false);
+  const [licenseCode, setLicenseCode] = useState("");
+  const [licenseMessage, setLicenseMessage] = useState("");
+  const [licenseMessageType, setLicenseMessageType] = useState<"error" | "success">("error");
+  const [licenseSubmitting, setLicenseSubmitting] = useState(false);
+  const [licenseChecking, setLicenseChecking] = useState(true);
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatusData>({
+    locked: false,
+    monthKey: "-",
+    dueDateLabel: "-",
+    reason: null,
+  });
   
   const numerDomuInputRef = useRef<HTMLInputElement>(null);
   const telefonInputRef = useRef<HTMLInputElement>(null);
@@ -152,9 +170,101 @@ export default function Home() {
 
   const calculatePriceMutation = api.pizza.calculatePrice.useMutation();
   const placeOrderMutation = api.pizza.placeOrder.useMutation();
+  const LICENSE_API_BASE = "http://localhost:3006";
+
+  const loadLicenseStatus = async () => {
+    setLicenseChecking(true);
+    try {
+      const response = await fetch(`${LICENSE_API_BASE}/api/licencja/status`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        setLicenseStatus({
+          locked: true,
+          monthKey: data.monthKey || "-",
+          dueDateLabel: data.dueDateLabel || "-",
+          reason: data.message || "Błąd sprawdzania licencji",
+        });
+        setLicenseMessage(data.message || "Błąd sprawdzania licencji");
+        setLicenseMessageType("error");
+        return;
+      }
+
+      setLicenseStatus({
+        locked: !!data.locked,
+        monthKey: data.monthKey || "-",
+        dueDateLabel: data.dueDateLabel || "-",
+        reason: data.reason || null,
+      });
+
+      if (data.locked) {
+        setLicenseMessage(data.reason || "Wymagana aktywacja licencji na bieżący miesiąc.");
+        setLicenseMessageType("error");
+      } else {
+        setLicenseMessage("");
+      }
+    } catch (error) {
+      setLicenseStatus((prev) => ({ ...prev, locked: true, reason: "Brak połączenia z modułem licencji" }));
+      setLicenseMessage(`Brak połączenia z modułem licencji: ${(error as Error).message}`);
+      setLicenseMessageType("error");
+    } finally {
+      setLicenseChecking(false);
+    }
+  };
+
+  const activateLicense = async () => {
+    const code = licenseCode.trim();
+    if (!/^[A-Za-z0-9]{8}$/.test(code)) {
+      setLicenseMessage("Kod musi mieć dokładnie 8 znaków (A-Z, a-z, 0-9).");
+      setLicenseMessageType("error");
+      return;
+    }
+
+    setLicenseSubmitting(true);
+    setLicenseMessage("");
+
+    try {
+      const response = await fetch(`${LICENSE_API_BASE}/api/licencja/aktywuj`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        setLicenseMessage(data.message || "Nie udało się aktywować licencji.");
+        setLicenseMessageType("error");
+        return;
+      }
+
+      setLicenseCode("");
+      setLicenseMessage("Licencja aktywowana poprawnie. Odblokowuję formularz...");
+      setLicenseMessageType("success");
+      await loadLicenseStatus();
+    } catch (error) {
+      setLicenseMessage(`Błąd aktywacji: ${(error as Error).message}`);
+      setLicenseMessageType("error");
+    } finally {
+      setLicenseSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLicenseStatus();
+  }, []);
 
   // Funkcja do składania zamówienia i drukowania paragonu
   const handleSubmitAndPrint = async () => {
+    if (licenseChecking) {
+      toast.error("Trwa sprawdzanie licencji. Spróbuj za chwilę.");
+      return;
+    }
+
+    if (licenseStatus.locked) {
+      toast.error("Najpierw aktywuj licencję.");
+      return;
+    }
+
     // Walidacja - tylko dla dowozu sprawdzamy telefon i adres
     if (typZamowienia === "dowoz") {
       if (!orderData.telefon.trim()) {
@@ -1138,6 +1248,16 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (licenseChecking) {
+      toast.error("Trwa sprawdzanie licencji. Spróbuj za chwilę.");
+      return;
+    }
+
+    if (licenseStatus.locked) {
+      toast.error("Najpierw aktywuj licencję.");
+      return;
+    }
     
     // Walidacja - tylko dla dowozu sprawdzamy telefon i adres
     if (typZamowienia === "dowoz") {
@@ -1310,7 +1430,7 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background py-3">
+      <main className={`min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background py-3 ${licenseChecking ? "pointer-events-none select-none" : ""} ${!licenseChecking && licenseStatus.locked ? "pointer-events-none select-none opacity-40 blur-[1px]" : ""}`}>
         <div className="container mx-auto max-w-7xl px-4">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
@@ -3026,6 +3146,56 @@ export default function Home() {
           </form>
         </div>
       </main>
+
+      {!licenseChecking && licenseStatus.locked && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <h2 className="text-3xl font-extrabold text-gray-900 mb-2">Aktywacja licencji</h2>
+            <p className="text-gray-600 mb-5 text-base leading-relaxed">
+              Aby odblokować formularz i panel zamówień, wpisz kod licencyjny na bieżący miesiąc.
+            </p>
+
+            <label className="block text-sm font-bold text-gray-800 mb-2">Kod licencyjny (8 znaków)</label>
+            <input
+              type="text"
+              value={licenseCode}
+              onChange={(e) => setLicenseCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void activateLicense();
+                }
+              }}
+              autoFocus
+              maxLength={8}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder="np. Ab12Cd34"
+              className="h-14 w-full rounded-xl border-2 border-gray-300 px-4 text-center text-2xl font-bold tracking-wider focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+            />
+
+            <button
+              type="button"
+              onClick={() => void activateLicense()}
+              disabled={licenseSubmitting}
+              className="mt-4 h-14 w-full rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-lg font-bold shadow-lg hover:from-orange-600 hover:to-orange-700 disabled:opacity-70"
+            >
+              {licenseSubmitting ? "Aktywowanie..." : "Aktywuj"}
+            </button>
+
+            {licenseMessage && (
+              <div className={`mt-4 rounded-lg border px-3 py-2 text-sm font-semibold ${licenseMessageType === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+                {licenseMessage}
+              </div>
+            )}
+
+            <div className="mt-4 text-sm text-gray-600 leading-relaxed">
+              Miesiąc rozliczeniowy: <strong>{licenseStatus.monthKey}</strong><br />
+              Termin aktywacji: <strong>{licenseStatus.dueDateLabel}</strong>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Custom Leave Modal */}
       {showLeaveModal && (

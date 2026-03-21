@@ -5,10 +5,68 @@ const url = require('url');
 const querystring = require('querystring');
 const fs = require('fs');
 require('dotenv').config();
+const {
+  getLicenseStatus,
+  activateCode,
+} = require('./licencja/license-service.cjs');
 
 const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url);
   const pathname = parsedUrl.pathname;
+
+  // API: Licencja (status + aktywacja)
+  if (pathname.startsWith('/api/licencja/')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    if (pathname === '/api/licencja/status' && req.method === 'GET') {
+      try {
+        const status = getLicenseStatus();
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(status));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          ok: false,
+          locked: true,
+          message: error.message,
+        }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/licencja/aktywuj' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => {
+        body += chunk.toString();
+      });
+
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body || '{}');
+          const result = activateCode(data.code);
+          const statusCode = result.ok ? 200 : 400;
+          res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, message: error.message }));
+        }
+      });
+      return;
+    }
+
+    res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: false, message: 'Nie znaleziono endpointu licencji' }));
+    return;
+  }
   
   // Endpoint do pobierania statystyk klienta
   if (pathname === '/customer-stats' && req.method === 'GET') {
@@ -102,144 +160,109 @@ const server = http.createServer(async (req, res) => {
         if (currentOrder.length > 0) {
           const staraSesjaId = currentOrder[0].sesja_id;
           const staraPlatnosc = currentOrder[0].platnosc;
-          const kwotaZamowienia = currentOrder[0].cena_calkowita;
-          const adresZamowienia = currentOrder[0].adres;
-          
-          // === SPRAWDZANIE ZMIANY CENY ===
-          if (cena !== null && cena !== kwotaZamowienia) {
-            const aktualnaSesjaId = sesjaId !== null ? (sesjaId === -1 ? null : sesjaId) : staraSesjaId;
-            
-            // Jeśli jest przypisana sesja i płatność nie jest online
-            if (aktualnaSesjaId && staraPlatnosc !== 'online') {
-              // Znajdź transakcję do aktualizacji
-              const [transakcjeDoZmiany] = await connection.execute(
-                `SELECT id FROM transakcje
-                 WHERE sesja_id = ? 
-                 AND typ = 'wplyw' 
-                 AND kwota = ? 
-                 AND opis LIKE ?
-                 ORDER BY data_utworzenia DESC 
-                 LIMIT 1`,
-                [aktualnaSesjaId, kwotaZamowienia, `%${adresZamowienia}%`]
-              );
-              
-              if (transakcjeDoZmiany.length > 0) {
-                // Zaktualizuj kwotę w istniejącej transakcji
+          const staraKwota = parseFloat(currentOrder[0].cena_calkowita);
+          const staryAdres = currentOrder[0].adres;
+
+          // Finalny stan zamówienia po edycji (jedno źródło prawdy)
+          const finalnaSesjaId = sesjaId !== null ? (sesjaId === -1 ? null : sesjaId) : staraSesjaId;
+          const finalnaPlatnosc = platnosc || staraPlatnosc;
+          const finalnaKwota = cena !== null ? cena : staraKwota;
+          const finalnyAdres = adres !== null ? adres : staryAdres;
+
+          // Transakcja ma istnieć tylko dla sesji kierowcy i tylko gdy płatność != online
+          const powinnaIstniecTransakcja = !!finalnaSesjaId && finalnaPlatnosc !== 'online';
+
+          // 1) Najpierw znajdź transakcje po zamowienie_id (najpewniejszy klucz)
+          const [transakcjeZamowienia] = await connection.execute(
+            `SELECT id, sesja_id, forma_platnosci
+             FROM transakcje
+             WHERE zamowienie_id = ?
+               AND typ = 'wplyw'
+             ORDER BY data_utworzenia DESC`,
+            [orderId]
+          );
+
+          let wszystkieTransakcje = [...transakcjeZamowienia];
+
+          // 2) Fallback dla starszych danych bez zamowienie_id
+          if (wszystkieTransakcje.length === 0) {
+            const [fallbackTransakcje] = await connection.execute(
+              `SELECT id, sesja_id, forma_platnosci
+               FROM transakcje
+               WHERE typ = 'wplyw'
+                 AND (sesja_id = ? OR sesja_id = ?)
+                 AND (kwota = ? OR kwota = ?)
+                 AND (opis LIKE ? OR opis LIKE ?)
+               ORDER BY data_utworzenia DESC`,
+              [staraSesjaId, finalnaSesjaId, staraKwota, finalnaKwota, `%${staryAdres}%`, `%${finalnyAdres}%`]
+            );
+
+            if (fallbackTransakcje.length > 0) {
+              wszystkieTransakcje = fallbackTransakcje;
+
+              // Podpinamy znalezione historyczne transakcje pod zamowienie_id,
+              // żeby kolejne edycje działały zawsze deterministycznie.
+              for (const tx of fallbackTransakcje) {
                 await connection.execute(
-                  `UPDATE transakcje 
-                   SET kwota = ?
-                   WHERE id = ?`,
-                  [cena, transakcjeDoZmiany[0].id]
+                  `UPDATE transakcje SET zamowienie_id = ? WHERE id = ?`,
+                  [orderId, tx.id]
                 );
-                console.log(`Zaktualizowano kwotę z ${kwotaZamowienia} na ${cena} PLN dla transakcji ID ${transakcjeDoZmiany[0].id}`);
-              } else {
-                console.log(`Nie znaleziono transakcji do aktualizacji kwoty`);
               }
             }
           }
-          
-          // === SPRAWDZANIE ZMIANY KIEROWCY ===
-          if (sesjaId !== null) {
-            const nowaSesjaId = sesjaId === -1 ? null : sesjaId;
-            
-            // Jeśli sesja się zmienia
-            if (staraSesjaId !== nowaSesjaId) {
-              // Użyj nowej ceny jeśli została zmieniona, inaczej użyj starej
-              const kwotaDoTransakcji = cena !== null ? cena : kwotaZamowienia;
-              // Użyj nowej płatności jeśli została zmieniona, inaczej użyj starej
-              const platnosc_do_transakcji = platnosc || staraPlatnosc;
-              
-              // Usuń transakcję ze starej sesji (jeśli była i nie była online)
-              if (staraSesjaId && staraPlatnosc !== 'online') {
-                await connection.execute(
-                  `DELETE FROM transakcje 
-                   WHERE sesja_id = ? 
-                   AND typ = 'wplyw' 
-                   AND kwota = ? 
-                   AND opis LIKE ?
-                   ORDER BY data_utworzenia DESC 
-                   LIMIT 1`,
-                  [staraSesjaId, kwotaZamowienia, `%${adresZamowienia}%`]
-                );
-                console.log(`Usunięto transakcję ze starej sesji ${staraSesjaId}`);
-              }
-              
-              // Dodaj transakcję do nowej sesji (jeśli jest i płatność nie jest online)
-              if (nowaSesjaId && platnosc_do_transakcji !== 'online') {
-                await connection.execute(
-                  'INSERT INTO transakcje (sesja_id, zamowienie_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?, ?)',
-                  [nowaSesjaId, orderId, 'wplyw', kwotaDoTransakcji, platnosc_do_transakcji, `Zamówienie - ${adresZamowienia}`]
-                );
-                console.log(`Dodano transakcję do nowej sesji ${nowaSesjaId} z kwotą ${kwotaDoTransakcji} PLN (${platnosc_do_transakcji})`);
-              }
-            }
-          }
-          
-          // === SPRAWDZANIE ZMIANY TYPU PŁATNOŚCI ===
-          if (platnosc && platnosc !== staraPlatnosc) {
-            const aktualnaSesjaId = sesjaId !== null ? (sesjaId === -1 ? null : sesjaId) : staraSesjaId;
-            
-            // Jeśli jest przypisana sesja
-            if (aktualnaSesjaId) {
-              // Sprawdź czy istnieje już transakcja dla tego zamówienia
-              const [istniejacaTransakcja] = await connection.execute(
-                `SELECT id, forma_platnosci FROM transakcje
-                 WHERE sesja_id = ? 
-                 AND typ = 'wplyw' 
-                 AND kwota = ? 
-                 AND opis LIKE ?
-                 ORDER BY data_utworzenia DESC 
-                 LIMIT 1`,
-                [aktualnaSesjaId, kwotaZamowienia, `%${adresZamowienia}%`]
+
+          if (powinnaIstniecTransakcja) {
+            if (wszystkieTransakcje.length > 0) {
+              const glownaTransakcja = wszystkieTransakcje[0];
+
+              // Aktualizuj jedną główną transakcję do finalnego stanu
+              await connection.execute(
+                `UPDATE transakcje
+                 SET sesja_id = ?,
+                     zamowienie_id = ?,
+                     kwota = ?,
+                     forma_platnosci = ?,
+                     opis = ?
+                 WHERE id = ?`,
+                [
+                  finalnaSesjaId,
+                  orderId,
+                  finalnaKwota,
+                  finalnaPlatnosc,
+                  `Zamówienie - ${finalnyAdres}`,
+                  glownaTransakcja.id
+                ]
               );
-              
-              // Jeśli zmiana na 'online'
-              if (platnosc === 'online') {
-                // Usuń transakcję jeśli istnieje
-                if (istniejacaTransakcja.length > 0) {
-                  await connection.execute(
-                    `DELETE FROM transakcje WHERE id = ?`,
-                    [istniejacaTransakcja[0].id]
-                  );
-                  console.log(`Usunięto transakcję - zmiana na płatność online`);
-                }
-              } 
-              // Jeśli zmiana z 'online' na gotówka/kartę
-              else if (staraPlatnosc === 'online') {
-                // Tylko dodaj transakcję jeśli jeszcze nie istnieje
-                if (istniejacaTransakcja.length === 0) {
-                  await connection.execute(
-                    'INSERT INTO transakcje (sesja_id, zamowienie_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?, ?)',
-                    [aktualnaSesjaId, orderId, 'wplyw', kwotaZamowienia, platnosc, `Zamówienie - ${adresZamowienia}`]
-                  );
-                  console.log(`Dodano transakcję - zmiana z online na ${platnosc}`);
-                } else {
-                  // Jeśli transakcja już istnieje, tylko zaktualizuj formę płatności
-                  await connection.execute(
-                    `UPDATE transakcje SET forma_platnosci = ? WHERE id = ?`,
-                    [platnosc, istniejacaTransakcja[0].id]
-                  );
-                  console.log(`Zaktualizowano formę płatności na ${platnosc} (transakcja już istniała)`);
-                }
+
+              // Usuń ewentualne duplikaty tej samej transakcji zamówienia
+              if (wszystkieTransakcje.length > 1) {
+                const idsDoUsuniecia = wszystkieTransakcje.slice(1).map(t => t.id);
+                const placeholders = idsDoUsuniecia.map(() => '?').join(',');
+                await connection.execute(
+                  `DELETE FROM transakcje WHERE id IN (${placeholders})`,
+                  idsDoUsuniecia
+                );
+                console.log(`Usunięto ${idsDoUsuniecia.length} duplikat(ów) transakcji dla zamówienia ${orderId}`);
               }
-              // Jeśli zmiana między gotówką a kartą
-              else {
-                if (istniejacaTransakcja.length > 0) {
-                  // Zaktualizuj formę płatności w istniejącej transakcji
-                  await connection.execute(
-                    `UPDATE transakcje SET forma_platnosci = ? WHERE id = ?`,
-                    [platnosc, istniejacaTransakcja[0].id]
-                  );
-                  console.log(`Zaktualizowano formę płatności na ${platnosc} dla transakcji ID ${istniejacaTransakcja[0].id}`);
-                } else {
-                  console.log(`Nie znaleziono transakcji do aktualizacji, tworzę nową`);
-                  // Jeśli nie znaleziono transakcji do aktualizacji, dodaj nową
-                  await connection.execute(
-                    'INSERT INTO transakcje (sesja_id, zamowienie_id, typ, kwota, forma_platnosci, opis) VALUES (?, ?, ?, ?, ?, ?)',
-                    [aktualnaSesjaId, orderId, 'wplyw', kwotaZamowienia, platnosc, `Zamówienie - ${adresZamowienia}`]
-                  );
-                }
-              }
+            } else {
+              // Brak transakcji - utwórz dokładnie jedną
+              await connection.execute(
+                `INSERT INTO transakcje (sesja_id, zamowienie_id, typ, kwota, forma_platnosci, opis)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [finalnaSesjaId, orderId, 'wplyw', finalnaKwota, finalnaPlatnosc, `Zamówienie - ${finalnyAdres}`]
+              );
+              console.log(`Dodano transakcję zamówienia ${orderId} do sesji ${finalnaSesjaId}`);
+            }
+          } else {
+            // Płatność online lub brak sesji -> brak transakcji w sesji kierowcy
+            if (wszystkieTransakcje.length > 0) {
+              const idsDoUsuniecia = wszystkieTransakcje.map(t => t.id);
+              const placeholders = idsDoUsuniecia.map(() => '?').join(',');
+              await connection.execute(
+                `DELETE FROM transakcje WHERE id IN (${placeholders})`,
+                idsDoUsuniecia
+              );
+              console.log(`Usunięto transakcje zamówienia ${orderId} (online/brak sesji)`);
             }
           }
         }
@@ -273,12 +296,85 @@ const server = http.createServer(async (req, res) => {
           updateValues.push(adres);
         }
         
-        updateValues.push(orderId);
-        
-        await connection.execute(
-          `UPDATE zamowienia SET ${updateFields.join(', ')} WHERE id = ?`,
-          updateValues
+        if (updateFields.length > 0) {
+          updateValues.push(orderId);
+
+          await connection.execute(
+            `UPDATE zamowienia SET ${updateFields.join(', ')} WHERE id = ?`,
+            updateValues
+          );
+        }
+
+        // OSTATECZNA SYNCHRONIZACJA (deterministyczna) po zapisie zamówienia.
+        // Dzięki temu wielokrotna edycja tego samego zamówienia zawsze kończy się
+        // dokładnie jedną poprawną transakcją (albo jej brakiem dla online/brak sesji).
+        const [updatedOrderRows] = await connection.execute(
+          'SELECT sesja_id, platnosc, cena_calkowita, adres FROM zamowienia WHERE id = ?',
+          [orderId]
         );
+
+        if (updatedOrderRows.length > 0) {
+          const updated = updatedOrderRows[0];
+          const finalnaSesjaId = updated.sesja_id;
+          const finalnaPlatnosc = updated.platnosc;
+          const finalnaKwota = parseFloat(updated.cena_calkowita);
+          const finalnyAdres = updated.adres;
+          const powinnaIstniecTransakcja = !!finalnaSesjaId && finalnaPlatnosc !== 'online';
+
+          const [transakcjePoZamowieniu] = await connection.execute(
+            `SELECT id
+             FROM transakcje
+             WHERE zamowienie_id = ?
+               AND typ = 'wplyw'
+             ORDER BY data_utworzenia DESC`,
+            [orderId]
+          );
+
+          if (powinnaIstniecTransakcja) {
+            if (transakcjePoZamowieniu.length > 0) {
+              const glowna = transakcjePoZamowieniu[0];
+              await connection.execute(
+                `UPDATE transakcje
+                 SET sesja_id = ?,
+                     zamowienie_id = ?,
+                     kwota = ?,
+                     forma_platnosci = ?,
+                     opis = ?
+                 WHERE id = ?`,
+                [
+                  finalnaSesjaId,
+                  orderId,
+                  finalnaKwota,
+                  finalnaPlatnosc,
+                  `Zamówienie - ${finalnyAdres}`,
+                  glowna.id
+                ]
+              );
+
+              if (transakcjePoZamowieniu.length > 1) {
+                const idsDuplikatow = transakcjePoZamowieniu.slice(1).map(t => t.id);
+                const placeholders = idsDuplikatow.map(() => '?').join(',');
+                await connection.execute(
+                  `DELETE FROM transakcje WHERE id IN (${placeholders})`,
+                  idsDuplikatow
+                );
+              }
+            } else {
+              await connection.execute(
+                `INSERT INTO transakcje (sesja_id, zamowienie_id, typ, kwota, forma_platnosci, opis)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [finalnaSesjaId, orderId, 'wplyw', finalnaKwota, finalnaPlatnosc, `Zamówienie - ${finalnyAdres}`]
+              );
+            }
+          } else if (transakcjePoZamowieniu.length > 0) {
+            const idsDoUsuniecia = transakcjePoZamowieniu.map(t => t.id);
+            const placeholders = idsDoUsuniecia.map(() => '?').join(',');
+            await connection.execute(
+              `DELETE FROM transakcje WHERE id IN (${placeholders})`,
+              idsDoUsuniecia
+            );
+          }
+        }
         
         res.writeHead(302, { 'Location': '/' });
         res.end();
@@ -4548,8 +4644,260 @@ const server = http.createServer(async (req, res) => {
     .keyboard-key.arrow:hover {
       background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%);
     }
+
+    .license-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 20000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(17, 24, 39, 0.72);
+      backdrop-filter: blur(2px);
+      padding: 24px;
+    }
+
+    .license-card {
+      width: 100%;
+      max-width: 520px;
+      background: #ffffff;
+      border-radius: 18px;
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+      padding: 24px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .license-title {
+      font-size: 30px;
+      color: #111827;
+      margin-bottom: 8px;
+      font-weight: 800;
+    }
+
+    .license-subtitle {
+      color: #4b5563;
+      margin-bottom: 18px;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .license-field-label {
+      display: block;
+      color: #1f2937;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .license-input {
+      width: 100%;
+      height: 54px;
+      border: 2px solid #d1d5db;
+      border-radius: 12px;
+      padding: 0 14px;
+      font-size: 24px;
+      letter-spacing: 2px;
+      font-weight: 700;
+      text-align: center;
+      text-transform: none;
+    }
+
+    .license-input:focus {
+      outline: none;
+      border-color: hsl(25 95% 53%);
+      box-shadow: 0 0 0 4px rgba(255, 123, 0, 0.15);
+    }
+
+    .license-activate-btn {
+      width: 100%;
+      margin-top: 14px;
+      height: 52px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 8px 18px rgba(249, 115, 22, 0.35);
+    }
+
+    .license-activate-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 24px rgba(249, 115, 22, 0.4);
+    }
+
+    .license-activate-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.7;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .license-message {
+      margin-top: 12px;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-weight: 600;
+      display: none;
+      line-height: 1.4;
+    }
+
+    .license-message.error {
+      display: block;
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+
+    .license-message.success {
+      display: block;
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+    }
+
+    .license-meta {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+
+    body.license-locked #app-root {
+      pointer-events: none;
+      user-select: none;
+      opacity: 0.35;
+      filter: grayscale(0.2) blur(1.2px);
+    }
   </style>
   <script>
+    const LICENSE_API_BASE = '';
+    let licenseLocked = true;
+    let licenseSubmitting = false;
+
+    function setLicenseMessage(message, type = 'error') {
+      const messageEl = document.getElementById('licenseMessage');
+      if (!messageEl) return;
+      messageEl.className = 'license-message ' + type;
+      messageEl.textContent = message;
+    }
+
+    function clearLicenseMessage() {
+      const messageEl = document.getElementById('licenseMessage');
+      if (!messageEl) return;
+      messageEl.className = 'license-message';
+      messageEl.textContent = '';
+    }
+
+    function setLicenseLocked(locked) {
+      licenseLocked = locked;
+      const overlay = document.getElementById('licenseOverlay');
+      if (!overlay) return;
+
+      if (locked) {
+        document.body.classList.add('license-locked');
+        overlay.style.display = 'flex';
+      } else {
+        document.body.classList.remove('license-locked');
+        overlay.style.display = 'none';
+      }
+    }
+
+    function setLicenseBusy(isBusy) {
+      licenseSubmitting = isBusy;
+      const button = document.getElementById('licenseActivateBtn');
+      if (!button) return;
+      button.disabled = isBusy;
+      button.textContent = isBusy ? 'Aktywowanie...' : 'Aktywuj';
+    }
+
+    async function loadLicenseStatus() {
+      try {
+        const response = await fetch(LICENSE_API_BASE + '/api/licencja/status');
+        const data = await response.json();
+
+        const monthEl = document.getElementById('licenseMonthKey');
+        const dueEl = document.getElementById('licenseDueDate');
+
+        if (monthEl) monthEl.textContent = data.monthKey || '-';
+        if (dueEl) dueEl.textContent = data.dueDateLabel || '-';
+
+        if (!response.ok) {
+          setLicenseLocked(true);
+          setLicenseMessage(data.message || 'Błąd sprawdzania licencji.');
+          return;
+        }
+
+        setLicenseLocked(!!data.locked);
+
+        if (data.locked) {
+          setLicenseMessage(data.reason || 'Wymagana aktywacja licencji dla bieżącego miesiąca.');
+        } else {
+          clearLicenseMessage();
+        }
+      } catch (error) {
+        setLicenseLocked(true);
+        setLicenseMessage('Brak połączenia z modułem licencji: ' + error.message);
+      }
+    }
+
+    async function activateLicenseCode() {
+      if (licenseSubmitting) return;
+
+      const input = document.getElementById('licenseCodeInput');
+      const code = (input?.value || '').trim();
+
+      if (!/^[A-Za-z0-9]{8}$/.test(code)) {
+        setLicenseMessage('Kod musi mieć dokładnie 8 znaków (A-Z, a-z, 0-9).');
+        return;
+      }
+
+      setLicenseBusy(true);
+      clearLicenseMessage();
+
+      try {
+        const response = await fetch(LICENSE_API_BASE + '/api/licencja/aktywuj', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+          setLicenseMessage(data.message || 'Nie udało się aktywować licencji.');
+          return;
+        }
+
+        setLicenseMessage('Licencja aktywowana poprawnie. Odblokowuję panel...', 'success');
+        if (input) input.value = '';
+        setTimeout(() => {
+          loadLicenseStatus();
+        }, 350);
+      } catch (error) {
+        setLicenseMessage('Błąd aktywacji: ' + error.message);
+      } finally {
+        setLicenseBusy(false);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const input = document.getElementById('licenseCodeInput');
+      if (input) {
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            activateLicenseCode();
+          }
+        });
+      }
+
+      loadLicenseStatus();
+    });
+
     let kierowcyList = [];
     
     // Załaduj listę kierowców na start
@@ -4959,6 +5307,7 @@ const server = http.createServer(async (req, res) => {
   </script>
 </head>
 <body>
+  <div id="app-root">
   <div style="max-width: 1600px; margin: 0 auto;">
     <h1 style="color: #1f2937; font-size: 2.2em; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 20px;">Panel obsługi zamówień</h1>
     
@@ -5134,6 +5483,35 @@ const server = http.createServer(async (req, res) => {
   <p style="color: #666; font-size: 12px;">
     Ostatnia aktualizacja: ${new Date().toLocaleString('pl-PL')}
   </p>
+  </div>
+
+  <div id="licenseOverlay" class="license-overlay" style="display: none;">
+    <div class="license-card">
+      <h2 class="license-title">Aktywacja licencji</h2>
+      <p class="license-subtitle">
+        Aby korzystać z panelu zamówień, wpisz kod licencyjny otrzymany na bieżący miesiąc.
+      </p>
+
+      <label class="license-field-label" for="licenseCodeInput">Kod licencyjny (8 znaków)</label>
+      <input
+        id="licenseCodeInput"
+        class="license-input"
+        type="text"
+        inputmode="text"
+        maxlength="8"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="np. Ab12Cd34"
+      />
+      <button id="licenseActivateBtn" class="license-activate-btn" onclick="activateLicenseCode()">Aktywuj</button>
+
+      <div id="licenseMessage" class="license-message"></div>
+      <div class="license-meta">
+        Miesiąc rozliczeniowy: <strong id="licenseMonthKey">-</strong><br>
+        Termin aktywacji: <strong id="licenseDueDate">-</strong>
+      </div>
+    </div>
+  </div>
 </body>
 </html>`;
 
